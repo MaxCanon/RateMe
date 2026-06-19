@@ -35,8 +35,47 @@ interface AlbumDao {
     @Query("SELECT * FROM albums WHERE id = :albumId")
     fun getAlbumWithSongs(albumId: Long): Flow<AlbumWithArtistAndSongs?>
 
-    @Query("SELECT AVG(CAST(rating AS REAL)) FROM songs WHERE albumId = :albumId AND rating IS NOT NULL")
-    suspend fun getAverageRating(albumId: Long): Double?
+    @Query("""
+        SELECT a.id, a.title, a.artistId, a.coverUrl, a.year, 
+               AVG(CAST(s.rating AS REAL)) as avgRating, 
+               ar.name as artistName
+        FROM albums a 
+        INNER JOIN songs s ON s.albumId = a.id 
+        INNER JOIN artists ar ON ar.id = a.artistId
+        WHERE s.rating IS NOT NULL 
+        GROUP BY a.id 
+        ORDER BY avgRating DESC
+    """)
+    fun getAlbumsByRating(): Flow<List<AlbumWithAvgRating>>
+
+    @Query("""
+        SELECT ar.* 
+        FROM artists ar
+        WHERE ar.id IN (
+            SELECT DISTINCT al.artistId 
+            FROM albums al 
+            INNER JOIN songs s ON s.albumId = al.id 
+            WHERE s.rating IS NOT NULL
+        )
+        ORDER BY ar.name
+    """)
+    fun getRatedArtists(): Flow<List<Artist>>
+
+    @Transaction
+    @Query("""
+        SELECT * FROM albums 
+        WHERE artistId = :artistId 
+        AND id IN (SELECT DISTINCT albumId FROM songs WHERE rating IS NOT NULL)
+    """)
+    fun getRatedAlbumsByArtist(artistId: Long): Flow<List<AlbumWithArtistAndSongs>>
+
+    @Transaction
+    @Query("""
+        SELECT * FROM albums 
+        WHERE id IN (SELECT DISTINCT albumId FROM songs WHERE rating IS NOT NULL)
+        ORDER BY title
+    """)
+    fun getRatedAlbums(): Flow<List<AlbumWithArtistAndSongs>>
 }
 
 data class AlbumWithArtistAndSongs(
@@ -45,4 +84,14 @@ data class AlbumWithArtistAndSongs(
     val artist: Artist,
     @Relation(parentColumn = "id", entityColumn = "albumId")
     val songs: List<Song>
+)
+
+data class AlbumWithAvgRating(
+    val id: Long,
+    val title: String,
+    val artistId: Long,
+    val coverUrl: String?,
+    val year: String?,
+    val avgRating: Double,
+    val artistName: String
 )

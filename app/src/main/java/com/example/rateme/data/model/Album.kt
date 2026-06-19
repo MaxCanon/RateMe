@@ -20,5 +20,6 @@ data class Album(
     val id: Long = 0,
     val title: String,
     val artistId: Long,
-    val coverUrl: String? = null
+    val coverUrl: String? = null,
+    val year: String? = null
 )
