@@ -31,6 +31,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.compose.runtime.saveable)
     // Стандартные
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

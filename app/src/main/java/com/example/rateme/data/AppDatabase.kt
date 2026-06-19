@@ -10,7 +10,7 @@ import com.example.rateme.data.model.Song
 
 @Database(
     entities = [Artist::class, Album::class, Song::class],
-    version = 2,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

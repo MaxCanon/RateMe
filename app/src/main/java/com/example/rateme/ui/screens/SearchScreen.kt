@@ -1,5 +1,6 @@
 package com.example.rateme.ui.screens
 
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,20 +8,24 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.rateme.data.network.*
 import com.example.rateme.data.ApiKey
+import com.example.rateme.data.SearchHistory
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
-    onAlbumSelected: (artist: String, album: String, coverUrl: String?, tracks: List<String>, previews: Map<String, String>) -> Unit,
+    onAlbumSelected: (artist: String, album: String, coverUrl: String?, tracks: List<String>, previews: Map<String, String>, year: String?) -> Unit,
     onBack: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
@@ -28,6 +33,9 @@ fun SearchScreen(
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
+    var isSearching by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var history by remember { mutableStateOf(SearchHistory.getHistory(context)) }
 
     val lastFmApi = remember {
         Retrofit.Builder()
@@ -50,13 +58,29 @@ fun SearchScreen(
         searchJob = scope.launch {
             delay(400)
             isLoading = true
+            isSearching = true
             errorMessage = null
             try {
+                Log.d("SearchScreen", "Поиск: $q")
                 val response = lastFmApi.searchAlbum(q, ApiKey.LAST_FM_API_KEY)
+                Log.d("SearchScreen", "Ответ: ${response.results?.albumMatches?.album?.size} альбомов")
                 results = response.results?.albumMatches?.album ?: emptyList()
                 if (results.isEmpty()) errorMessage = "Ничего не найдено"
+                else {
+                    SearchHistory.addToHistory(context, q)
+                    history = SearchHistory.getHistory(context)
+                }
+            } catch (e: UnknownHostException) {
+                Log.e("SearchScreen", "Нет интернета", e)
+                errorMessage = "Нет интернета. Проверьте подключение."
+                results = emptyList()
+            } catch (e: SocketTimeoutException) {
+                Log.e("SearchScreen", "Таймаут", e)
+                errorMessage = "Сервер не отвечает. Попробуйте позже."
+                results = emptyList()
             } catch (e: Exception) {
-                errorMessage = "Ошибка сети"
+                Log.e("SearchScreen", "Ошибка: ${e.message}", e)
+                errorMessage = "Ошибка сети: ${e.message}"
                 results = emptyList()
             }
             isLoading = false
@@ -68,7 +92,7 @@ fun SearchScreen(
             TopAppBar(
                 title = { Text("Поиск альбома") },
                 navigationIcon = {
-                    TextButton(onClick = onBack) { Text("← Назад") }
+                    TextButton(onClick = onBack) { Text("Назад") }
                 }
             )
         }
@@ -79,12 +103,39 @@ fun SearchScreen(
                 onValueChange = {
                     query = it
                     if (it.length >= 2) doSearch(it)
-                    else results = emptyList()
+                    else {
+                        results = emptyList()
+                        isSearching = false
+                    }
                 },
                 label = { Text("Название альбома или исполнитель") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
+
+            if (!isSearching && query.isBlank() && history.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("История поиска:", style = MaterialTheme.typography.labelMedium)
+                Spacer(modifier = Modifier.height(4.dp))
+                history.take(5).forEach { item ->
+                    TextButton(onClick = {
+                        query = item
+                        doSearch(item)
+                    }) {
+                        Text(item, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                TextButton(onClick = {
+                    SearchHistory.clearHistory(context)
+                    history = emptyList()
+                }) {
+                    Text(
+                        "Очистить историю",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
 
             if (isLoading) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -94,6 +145,10 @@ fun SearchScreen(
             if (errorMessage != null && results.isEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(errorMessage!!, color = MaterialTheme.colorScheme.error)
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(onClick = { doSearch(query) }) {
+                    Text("Повторить")
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -116,8 +171,11 @@ fun SearchScreen(
                                         )
                                         val tracks = info.album?.tracks?.track?.mapNotNull { it.name } ?: emptyList()
                                         val cover = info.album?.image?.lastOrNull()?.url
+                                        val year = info.album?.wiki?.published?.let { published ->
+                                            // Ищем 4 цифры подряд (год)
+                                            Regex("\\d{4}").find(published)?.value
+                                        }
 
-                                        // Ищем превью для каждого трека через Deezer
                                         val previews = mutableMapOf<String, String>()
                                         tracks.forEach { track ->
                                             try {
@@ -135,7 +193,8 @@ fun SearchScreen(
                                             album.name ?: "",
                                             cover,
                                             tracks,
-                                            previews
+                                            previews,
+                                            null
                                         )
                                     } catch (_: Exception) {
                                         onAlbumSelected(
@@ -143,7 +202,8 @@ fun SearchScreen(
                                             album.name ?: "",
                                             album.image?.lastOrNull()?.url,
                                             emptyList(),
-                                            emptyMap()
+                                            emptyMap(),
+                                            null
                                         )
                                     }
                                     isLoading = false
@@ -152,7 +212,11 @@ fun SearchScreen(
                     ) {
                         Row(modifier = Modifier.padding(12.dp)) {
                             if (!imageUrl.isNullOrBlank()) {
-                                AsyncImage(model = imageUrl, contentDescription = null, modifier = Modifier.size(60.dp))
+                                AsyncImage(
+                                    model = imageUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(60.dp)
+                                )
                                 Spacer(modifier = Modifier.width(12.dp))
                             }
                             Column {

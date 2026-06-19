@@ -1,5 +1,6 @@
 package com.example.rateme.ui.screens
 
+import android.content.Intent
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
@@ -10,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -23,8 +25,12 @@ import kotlin.math.roundToInt
 fun AlbumScreen(
     albumWithSongs: AlbumWithArtistAndSongs?,
     onBack: () -> Unit,
-    onRatingChanged: (Long, Int) -> Unit
+    onRatingChanged: (Long, Int) -> Unit,
+    onShareClick: (Intent) -> Unit,
+    readOnly: Boolean = false
 ) {
+    val context = LocalContext.current
+
     if (albumWithSongs == null) {
         Box(modifier = Modifier.fillMaxSize()) {
             CircularProgressIndicator()
@@ -47,6 +53,31 @@ fun AlbumScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        val shareText = buildString {
+                            appendLine("🎵 ${albumWithSongs.album.title} — ${albumWithSongs.artist.name}")
+                            if (!albumWithSongs.album.year.isNullOrBlank()) {
+                                appendLine("📅 ${albumWithSongs.album.year}")
+                            }
+                            appendLine()
+                            albumWithSongs.songs.forEachIndexed { i, s ->
+                                val r = s.rating?.toString() ?: "—"
+                                appendLine("${i + 1}. ${s.title} — $r/10")
+                            }
+                            val avg = albumWithSongs.songs.mapNotNull { it.rating }.average().let {
+                                if (it.isNaN()) "—" else String.format("%.1f", it)
+                            }
+                            appendLine()
+                            appendLine("Средний балл: $avg/10")
+                        }
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, shareText)
+                        }
+                        onShareClick(intent)
+                    }) {
+                        Text("📤")
+                    }
                     TextButton(onClick = onBack) { Text("Готово ✓") }
                 }
             )
@@ -57,11 +88,45 @@ fun AlbumScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // Информация об альбоме
+            item {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        albumWithSongs.artist.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    if (!albumWithSongs.album.year.isNullOrBlank()) {
+                        Text(
+                            "📅 ${albumWithSongs.album.year}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    if (readOnly) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "⚠️ Просмотр оценок. Здесь оценивать треки нельзя.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Треков: ${albumWithSongs.songs.size}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
+            // Список песен
             itemsIndexed(albumWithSongs.songs) { index, song ->
                 SongRow(
                     song = song,
                     trackNumber = index + 1,
-                    onRatingChanged = { rating -> onRatingChanged(song.id, rating) }
+                    onRatingChanged = { rating -> onRatingChanged(song.id, rating) },
+                    readOnly = readOnly
                 )
             }
             item { Spacer(modifier = Modifier.height(16.dp)) }
@@ -100,12 +165,11 @@ fun MarqueeText(
 fun SongRow(
     song: Song,
     trackNumber: Int,
-    onRatingChanged: (Int) -> Unit
+    onRatingChanged: (Int) -> Unit,
+    readOnly: Boolean = false
 ) {
     var sliderValue by remember { mutableFloatStateOf(song.rating?.toFloat() ?: 0f) }
     var isPlaying by remember { mutableStateOf(false) }
-
-    // Простой MediaPlayer (ExoPlayer был бы лучше, но сложнее)
     var mediaPlayer by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
 
     fun stopPreview() {
@@ -127,7 +191,6 @@ fun SongRow(
                 overflow = TextOverflow.Ellipsis
             )
 
-            // Кнопка прослушивания
             if (!song.previewUrl.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Button(
@@ -148,7 +211,8 @@ fun SongRow(
                         }
                     },
                     modifier = Modifier.height(32.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    enabled = !readOnly || isPlaying
                 ) {
                     Text(
                         if (isPlaying) "⏹ Стоп" else "▶ Прослушать 30с",
@@ -165,21 +229,38 @@ fun SongRow(
                 onValueChangeFinished = { onRatingChanged(sliderValue.roundToInt()) },
                 valueRange = 0f..10f,
                 steps = 10,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !readOnly
             )
+
+            if (readOnly) {
+                Text(
+                    "Здесь оценивать треки нельзя",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 for (i in 0..10) {
-                    Text("$i", style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+                    Text(
+                        text = "$i",
+                        style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
+
             Text(
-                "Оценка: ${sliderValue.roundToInt()}/10",
+                text = "Оценка: ${sliderValue.roundToInt()}/10",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,

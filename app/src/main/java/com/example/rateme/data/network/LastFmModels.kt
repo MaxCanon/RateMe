@@ -25,7 +25,8 @@ data class LastFmAlbumDetail(
     val name: String?,
     val artist: String?,
     val image: List<LastFmImage>?,
-    val tracks: LastFmTracks?
+    val tracks: LastFmTracks?,
+    val wiki: LastFmWiki?
 )
 data class LastFmTracks(
     @SerializedName("track")
@@ -36,7 +37,9 @@ data class LastFmTrack(
     @SerializedName("duration")
     val duration: String?
 )
-
+data class LastFmWiki(
+    val published: String?
+)
 data class LastFmImage(
     @SerializedName("#text")
     val url: String?,

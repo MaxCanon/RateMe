@@ -23,11 +23,15 @@ fun HomeScreen(
     onAddClick: () -> Unit,
     onDeleteClick: (Album) -> Unit,
     isDarkTheme: Boolean,
-    onThemeToggle: () -> Unit
+    onThemeToggle: () -> Unit,
+    onRatedClick: () -> Unit,
+    onRatingClick: () -> Unit,
+    onHomeClick: () -> Unit = {},
+    showActions: Boolean = true
 ) {
     var albumToDelete by remember { mutableStateOf<Album?>(null) }
 
-    if (albumToDelete != null) {
+    if (albumToDelete != null && showActions) {
         AlertDialog(
             onDismissRequest = { albumToDelete = null },
             title = { Text("Удалить альбом?") },
@@ -49,27 +53,42 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("RateMe 🎵") },
+                title = {
+                    TextButton(onClick = onHomeClick) {
+                        Text(
+                            "RateMe 🎵",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                },
                 actions = {
-                    IconButton(onClick = onThemeToggle) {
-                        Text(if (isDarkTheme) "☀️" else "🌙")
+                    if (showActions) {
+                        IconButton(onClick = onRatedClick) { Text("📁") }
+                        IconButton(onClick = onRatingClick) { Text("🏆") }
+                        IconButton(onClick = onThemeToggle) { Text(if (isDarkTheme) "☀️" else "🌙") }
                     }
                 }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddClick) {
-                Text("+")
+            if (showActions) {
+                FloatingActionButton(onClick = onAddClick) { Text("+") }
             }
         }
     ) { padding ->
         if (albums.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
                 Text("Нет альбомов. Нажми + чтобы добавить!")
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
                 items(albums) { item ->
+                    val ratedCount = item.songs.count { it.rating != null }
+                    val totalCount = item.songs.size
                     val avgRating = item.songs
                         .mapNotNull { it.rating }
                         .takeIf { it.isNotEmpty() }
@@ -77,31 +96,75 @@ fun HomeScreen(
                         ?.let { String.format("%.1f", it) }
                         ?: "—"
 
+                    val statusText = if (ratedCount == totalCount && totalCount > 0) {
+                        "Оценены все $totalCount треков"
+                    } else {
+                        "Оценено $ratedCount из $totalCount"
+                    }
+
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp, vertical = 6.dp)
                             .combinedClickable(
                                 onClick = { onAlbumClick(item.album.id) },
-                                onLongClick = { albumToDelete = item.album }
+                                onLongClick = { if (showActions) albumToDelete = item.album }
                             )
                     ) {
-                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Обложка или иконка
                             if (!item.album.coverUrl.isNullOrBlank()) {
-                                AsyncImage(model = item.album.coverUrl, contentDescription = null, modifier = Modifier.size(56.dp))
+                                AsyncImage(
+                                    model = item.album.coverUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(56.dp)
+                                )
                             } else {
-                                Box(modifier = Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                                Box(
+                                    modifier = Modifier.size(56.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     Text("🎵", style = MaterialTheme.typography.headlineMedium)
                                 }
                             }
+
                             Spacer(modifier = Modifier.width(12.dp))
+
+                            // Информация об альбоме
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(item.album.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                Text(item.artist.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                                Text("⭐ $avgRating/10 • ${item.songs.size} песен", style = MaterialTheme.typography.labelSmall)
+                                Text(
+                                    item.album.title,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    item.artist.name,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+
+                                Text(
+                                    "⭐ $avgRating/10",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                                Text(
+                                    statusText,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
                             }
-                            IconButton(onClick = { onAlbumClick(item.album.id) }) { Text("✏️") }
-                            IconButton(onClick = { albumToDelete = item.album }) { Text("❌") }
+
+                            // Кнопки действий
+                            if (showActions) {
+                                IconButton(onClick = { onAlbumClick(item.album.id) }) {
+                                    Text("✏️")
+                                }
+                                IconButton(onClick = { albumToDelete = item.album }) {
+                                    Text("❌")
+                                }
+                            }
                         }
                     }
                 }
