@@ -21,7 +21,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         artistName: String,
         albumTitle: String,
         songTitles: List<String>,
-        coverUrl: String? = null
+        coverUrl: String? = null,
+        previewUrls: Map<String, String> = emptyMap()
     ) = viewModelScope.launch {
         val artistId = dao.insertArtist(Artist(name = artistName.trim()))
         val albumId = dao.insertAlbum(
@@ -30,7 +31,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         songTitles.forEachIndexed { index, title ->
             if (title.isNotBlank()) {
                 dao.insertSong(
-                    Song(title = title.trim(), albumId = albumId, trackNumber = index + 1)
+                    Song(
+                        title = title.trim(),
+                        albumId = albumId,
+                        trackNumber = index + 1,
+                        previewUrl = previewUrls[title]
+                    )
                 )
             }
         }

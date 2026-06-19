@@ -21,5 +21,6 @@ data class Song(
     val title: String,
     val albumId: Long,
     val trackNumber: Int,
-    val rating: Int? = null
+    val rating: Int? = null,
+    val previewUrl: String? = null
 )
