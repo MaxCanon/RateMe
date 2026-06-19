@@ -27,7 +27,10 @@ fun HomeScreen(
     onRatedClick: () -> Unit,
     onRatingClick: () -> Unit,
     onHomeClick: () -> Unit = {},
-    showActions: Boolean = true
+    showActions: Boolean = true,
+    showTopBar: Boolean = true,
+    showAddButton: Boolean = true,
+    title: String = "RateMe 🎵"
 ) {
     var albumToDelete by remember { mutableStateOf<Album?>(null) }
 
@@ -52,34 +55,40 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    TextButton(onClick = onHomeClick) {
-                        Text(
-                            "RateMe 🎵",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+            if (showTopBar) {
+                TopAppBar(
+                    title = {
+                        TextButton(onClick = onHomeClick) {
+                            Text(
+                                title,
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    },
+                    actions = {
+                        if (showActions) {
+                            IconButton(onClick = onRatedClick) { Text("📁") }
+                            IconButton(onClick = onRatingClick) { Text("🏆") }
+                            IconButton(onClick = onThemeToggle) { Text(if (isDarkTheme) "☀️" else "🌙") }
+                        }
                     }
-                },
-                actions = {
-                    if (showActions) {
-                        IconButton(onClick = onRatedClick) { Text("📁") }
-                        IconButton(onClick = onRatingClick) { Text("🏆") }
-                        IconButton(onClick = onThemeToggle) { Text(if (isDarkTheme) "☀️" else "🌙") }
-                    }
-                }
-            )
+                )
+            }
         },
         floatingActionButton = {
-            if (showActions) {
-                FloatingActionButton(onClick = onAddClick) { Text("+") }
+            if (showAddButton) {
+                FloatingActionButton(onClick = onAddClick) {
+                    Text("+")
+                }
             }
         }
     ) { padding ->
         if (albums.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
                 Text("Нет альбомов. Нажми + чтобы добавить!")
@@ -115,7 +124,6 @@ fun HomeScreen(
                             modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Обложка или иконка
                             if (!item.album.coverUrl.isNullOrBlank()) {
                                 AsyncImage(
                                     model = item.album.coverUrl,
@@ -133,7 +141,6 @@ fun HomeScreen(
 
                             Spacer(modifier = Modifier.width(12.dp))
 
-                            // Информация об альбоме
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     item.album.title,
@@ -145,7 +152,6 @@ fun HomeScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.primary
                                 )
-
                                 Text(
                                     "⭐ $avgRating/10",
                                     style = MaterialTheme.typography.labelSmall
@@ -156,7 +162,6 @@ fun HomeScreen(
                                 )
                             }
 
-                            // Кнопки действий
                             if (showActions) {
                                 IconButton(onClick = { onAlbumClick(item.album.id) }) {
                                     Text("✏️")
