@@ -5,6 +5,10 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -70,17 +74,12 @@ fun HomeScreen(
                         if (showActions) {
                             IconButton(onClick = onRatedClick) { Text("📁") }
                             IconButton(onClick = onRatingClick) { Text("🏆") }
-                            IconButton(onClick = onThemeToggle) { Text(if (isDarkTheme) "☀️" else "🌙") }
+                            IconButton(onClick = onThemeToggle) {
+                                Text(if (isDarkTheme) "☀️" else "🌙")
+                            }
                         }
                     }
                 )
-            }
-        },
-        floatingActionButton = {
-            if (showAddButton) {
-                FloatingActionButton(onClick = onAddClick) {
-                    Text("+")
-                }
             }
         }
     ) { padding ->
@@ -118,7 +117,12 @@ fun HomeScreen(
                             .combinedClickable(
                                 onClick = { onAlbumClick(item.album.id) },
                                 onLongClick = { if (showActions) albumToDelete = item.album }
-                            )
+                            ),
+                        shape = MaterialTheme.shapes.large,
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                        )
                     ) {
                         Row(
                             modifier = Modifier.padding(12.dp),
@@ -135,7 +139,12 @@ fun HomeScreen(
                                     modifier = Modifier.size(56.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text("🎵", style = MaterialTheme.typography.headlineMedium)
+                                    Icon(
+                                        Icons.Filled.Star,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(40.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
                                 }
                             }
 
@@ -164,10 +173,18 @@ fun HomeScreen(
 
                             if (showActions) {
                                 IconButton(onClick = { onAlbumClick(item.album.id) }) {
-                                    Text("✏️")
+                                    Icon(
+                                        Icons.Filled.Edit,
+                                        contentDescription = "Оценить",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
                                 }
                                 IconButton(onClick = { albumToDelete = item.album }) {
-                                    Text("❌")
+                                    Icon(
+                                        Icons.Filled.Delete,
+                                        contentDescription = "Удалить",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
                                 }
                             }
                         }

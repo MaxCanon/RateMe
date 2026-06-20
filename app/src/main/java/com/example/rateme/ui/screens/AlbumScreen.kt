@@ -6,12 +6,13 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -29,8 +30,6 @@ fun AlbumScreen(
     onShareClick: (Intent) -> Unit,
     readOnly: Boolean = false
 ) {
-    val context = LocalContext.current
-
     if (albumWithSongs == null) {
         Box(modifier = Modifier.fillMaxSize()) {
             CircularProgressIndicator()
@@ -76,7 +75,7 @@ fun AlbumScreen(
                         }
                         onShareClick(intent)
                     }) {
-                        Text("📤")
+                        Icon(Icons.Filled.Share, contentDescription = "Поделиться")
                     }
                     TextButton(onClick = onBack) { Text("Готово ✓") }
                 }
@@ -88,21 +87,15 @@ fun AlbumScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Информация об альбоме
             item {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         albumWithSongs.artist.name,
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
                     if (!albumWithSongs.album.year.isNullOrBlank()) {
-                        Text(
-                            "📅 ${albumWithSongs.album.year}",
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                        Text("📅 ${albumWithSongs.album.year}", style = MaterialTheme.typography.bodySmall)
                     }
                     if (readOnly) {
                         Spacer(modifier = Modifier.height(8.dp))
@@ -113,14 +106,10 @@ fun AlbumScreen(
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "Треков: ${albumWithSongs.songs.size}",
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                    Text("Треков: ${albumWithSongs.songs.size}", style = MaterialTheme.typography.bodySmall)
                 }
             }
 
-            // Список песен
             itemsIndexed(albumWithSongs.songs) { index, song ->
                 SongRow(
                     song = song,
@@ -135,10 +124,7 @@ fun AlbumScreen(
 }
 
 @Composable
-fun MarqueeText(
-    text: String,
-    modifier: Modifier = Modifier
-) {
+fun MarqueeText(text: String, modifier: Modifier = Modifier) {
     val infiniteTransition = rememberInfiniteTransition()
     val offset by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -182,22 +168,20 @@ fun SongRow(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        shape = MaterialTheme.shapes.large,
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                "$trackNumber. ${song.title}",
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            Text("$trackNumber. ${song.title}", maxLines = 2, overflow = TextOverflow.Ellipsis)
 
             if (!song.previewUrl.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Button(
                     onClick = {
-                        if (isPlaying) {
-                            stopPreview()
-                        } else {
+                        if (isPlaying) stopPreview()
+                        else {
                             try {
                                 stopPreview()
                                 mediaPlayer = android.media.MediaPlayer().apply {
@@ -214,10 +198,7 @@ fun SongRow(
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                     enabled = !readOnly || isPlaying
                 ) {
-                    Text(
-                        if (isPlaying) "⏹ Стоп" else "▶ Прослушать 30с",
-                        style = MaterialTheme.typography.labelSmall
-                    )
+                    Text(if (isPlaying) "⏹ Стоп" else "▶ Прослушать 30с", style = MaterialTheme.typography.labelSmall)
                 }
             }
 
@@ -243,24 +224,15 @@ fun SongRow(
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 for (i in 0..10) {
-                    Text(
-                        text = "$i",
-                        style = MaterialTheme.typography.labelSmall,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.weight(1f)
-                    )
+                    Text("$i", style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
                 }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
-
             Text(
-                text = "Оценка: ${sliderValue.roundToInt()}/10",
+                "Оценка: ${sliderValue.roundToInt()}/10",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
