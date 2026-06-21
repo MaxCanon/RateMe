@@ -14,6 +14,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("String", "LASTFM_API_KEY", "\"06a33b4134631964a79497191893ab83\"")
     }
 
     buildTypes {
@@ -27,6 +28,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -58,6 +60,7 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.6")
 
     implementation("androidx.compose.runtime:runtime-livedata:1.7.5")
+    implementation("androidx.compose.material:material-icons-extended:1.7.5")
 
     // Retrofit (запросы в интернет)
     implementation("com.squareup.retrofit2:retrofit:2.11.0")

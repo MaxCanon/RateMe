@@ -1,5 +1,6 @@
 package com.example.rateme.data
 
 object ApiKey {
-    const val LAST_FM_API_KEY = "06a33b4134631964a79497191893ab83"
+    val LAST_FM_API_KEY: String
+        get() = com.example.rateme.BuildConfig.LASTFM_API_KEY
 }

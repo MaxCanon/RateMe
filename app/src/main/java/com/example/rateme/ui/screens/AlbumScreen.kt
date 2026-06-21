@@ -161,6 +161,13 @@ fun SongRow(
     var sliderValue by remember { mutableFloatStateOf(song.rating?.toFloat() ?: 0f) }
     var isPlaying by remember { mutableStateOf(false) }
     var mediaPlayer by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+    DisposableEffect(Unit) {
+        onDispose {
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+            mediaPlayer = null
+        }
+    }
 
     fun stopPreview() {
         mediaPlayer?.stop()

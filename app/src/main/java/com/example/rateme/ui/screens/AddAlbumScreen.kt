@@ -1,6 +1,5 @@
 package com.example.rateme.ui.screens
 
-import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,10 +18,6 @@ import com.example.rateme.data.network.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,20 +34,8 @@ fun AddAlbumScreen(
     val context = LocalContext.current
     var history by remember { mutableStateOf(SearchHistory.getHistory(context)) }
 
-    val lastFmApi = remember {
-        Retrofit.Builder()
-            .baseUrl("https://ws.audioscrobbler.com/2.0/")
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(LastFmApi::class.java)
-    }
-    val deezerApi = remember {
-        Retrofit.Builder()
-            .baseUrl("https://api.deezer.com/")
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(DeezerApi::class.java)
-    }
+    val lastFmApi = ApiClient.lastFmApi
+    val deezerApi = ApiClient.deezerApi
     val scope = rememberCoroutineScope()
 
     fun doSearch(q: String) {
@@ -70,12 +53,6 @@ fun AddAlbumScreen(
                     SearchHistory.addToHistory(context, q)
                     history = SearchHistory.getHistory(context)
                 }
-            } catch (e: UnknownHostException) {
-                errorMessage = "Нет интернета"
-                results = emptyList()
-            } catch (e: SocketTimeoutException) {
-                errorMessage = "Сервер не отвечает"
-                results = emptyList()
             } catch (e: Exception) {
                 errorMessage = "Ошибка сети"
                 results = emptyList()
@@ -95,7 +72,6 @@ fun AddAlbumScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
-            // Поисковая строка
             OutlinedTextField(
                 value = query,
                 onValueChange = {
@@ -111,7 +87,6 @@ fun AddAlbumScreen(
                 singleLine = true
             )
 
-            // История поиска
             if (!hasSearched && query.isBlank() && history.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("История:", style = MaterialTheme.typography.labelMedium)
@@ -145,7 +120,6 @@ fun AddAlbumScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Результаты поиска
             if (results.isEmpty() && hasSearched && !isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Ничего не найдено. Попробуйте другой запрос.")

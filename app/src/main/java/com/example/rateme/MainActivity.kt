@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -36,7 +38,8 @@ import com.example.rateme.ui.components.AppBackground
 import com.example.rateme.ui.screens.*
 import com.example.rateme.ui.theme.RateMeTheme
 import com.example.rateme.viewmodel.MainViewModel
-import kotlinx.coroutines.delay
+import com.example.rateme.ui.screens.StatsScreen
+import com.example.rateme.ui.screens.SettingsScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,7 +69,6 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
     var isLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
-        delay(1000) // для демонстрации shimmer, потом убрать
         viewModel.allAlbums.collect {
             albums = it
             isLoading = false
@@ -90,7 +92,7 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
         }
     }
 
-    val showBottomBar = currentRoute in listOf("home", "rated", "rating", "add")
+    val showBottomBar = currentRoute in listOf("home", "rated", "rating", "add", "stats", "settings")
 
     Scaffold(
         bottomBar = {
@@ -143,7 +145,7 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                             }
                         }) {
                             Icon(
-                                Icons.Filled.Star,
+                                Icons.Filled.ThumbUp,
                                 contentDescription = null,
                                 tint = if (currentRoute == "rated") MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
@@ -209,21 +211,30 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                             else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
                     }
-                    // Тема
+                    // Статистика
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.weight(1f)
                     ) {
-                        IconButton(onClick = onThemeToggle) {
-                            Text(
-                                if (isDarkTheme) "☀️" else "🌙",
-                                style = MaterialTheme.typography.titleMedium
+                        IconButton(onClick = {
+                            navController.navigate("stats") {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }) {
+                            Icon(
+                                Icons.Filled.EmojiEvents,
+                                contentDescription = null,
+                                tint = if (currentRoute == "stats") MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
                         }
                         Text(
-                            "Тема",
+                            "Статистика",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            color = if (currentRoute == "stats") MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
                     }
                 }
@@ -248,7 +259,8 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                     showActions = true,
                     showTopBar = true,
                     showAddButton = false,
-                    isLoading = isLoading
+                    isLoading = isLoading,
+                    onSettingsClick = { navController.navigate("settings") }
                 )
             }
             composable("rated") {
@@ -302,11 +314,31 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                 )
             }
             composable("add") {
+                val context = LocalContext.current
                 AddAlbumScreen(
                     onAlbumSelected = { artist, album, coverUrl, tracks, previews, year ->
-                        viewModel.addAlbumWithSongs(artist, album, tracks, coverUrl, previews, year)
+                        viewModel.addAlbumWithSongs(
+                            artist, album, tracks, coverUrl, previews, year,
+                            onDuplicate = {
+                                android.widget.Toast.makeText(context, "Данный альбом уже добавлен", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        )
                         navController.navigate("home")
                     },
+                    onBack = { navController.navigate("home") }
+                )
+            }
+            composable("stats") {
+                StatsScreen(
+                    albums = albums,
+                    ratedAlbums = ratedAlbums,
+                    onBack = {}
+                )
+            }
+            composable("settings") {
+                SettingsScreen(
+                    isDarkTheme = isDarkTheme,
+                    onThemeToggle = onThemeToggle,
                     onBack = { navController.navigate("home") }
                 )
             }

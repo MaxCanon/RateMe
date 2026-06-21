@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Star
@@ -22,6 +23,7 @@ import coil.compose.AsyncImage
 import com.example.rateme.data.AlbumWithArtistAndSongs
 import com.example.rateme.data.model.Album
 import com.example.rateme.ui.components.ShimmerLoadingList
+import androidx.compose.material.icons.filled.Settings
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -34,12 +36,14 @@ fun HomeScreen(
     onThemeToggle: () -> Unit,
     onRatedClick: () -> Unit,
     onRatingClick: () -> Unit,
+    onSettingsClick: () -> Unit = {},
     onHomeClick: () -> Unit = {},
     showActions: Boolean = true,
     showTopBar: Boolean = true,
     showAddButton: Boolean = true,
-    title: String = "RateMe 🎵",
+    title: String = "RateMe",
     isLoading: Boolean = false
+
 ) {
     var albumToDelete by remember { mutableStateOf<Album?>(null) }
     var animationsStarted by remember { mutableStateOf(false) }
@@ -71,10 +75,28 @@ fun HomeScreen(
         topBar = {
             if (showTopBar) {
                 TopAppBar(
-                    title = { Text(title, style = MaterialTheme.typography.titleMedium) },
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Filled.Audiotrack,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(title, style = MaterialTheme.typography.titleMedium)
+                        }
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent
-                    )
+                    ),
+                    actions = {
+                        if (showActions) {
+                            IconButton(onClick = onSettingsClick) {
+                                Icon(Icons.Filled.Settings, contentDescription = "Настройки")
+                            }
+                        }
+                    }
                 )
             }
         }

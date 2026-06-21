@@ -76,6 +76,12 @@ interface AlbumDao {
         ORDER BY title
     """)
     fun getRatedAlbums(): Flow<List<AlbumWithArtistAndSongs>>
+
+    @Query("SELECT COUNT(*) FROM albums WHERE title = :title AND artistId = :artistId")
+    suspend fun albumExists(title: String, artistId: Long): Int
+
+    @Query("SELECT * FROM artists WHERE name = :name LIMIT 1")
+    suspend fun getArtistByName(name: String): Artist?
 }
 
 data class AlbumWithArtistAndSongs(

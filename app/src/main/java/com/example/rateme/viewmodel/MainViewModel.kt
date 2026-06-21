@@ -27,13 +27,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         songTitles: List<String>,
         coverUrl: String? = null,
         previewUrls: Map<String, String> = emptyMap(),
-        year: String? = null
+        year: String? = null,
+        onDuplicate: () -> Unit = {}
     ) = viewModelScope.launch {
-        val ratedAlbums: Flow<List<AlbumWithArtistAndSongs>> = dao.getRatedAlbums()
-        val artistId = dao.insertArtist(Artist(name = artistName.trim()))
+        val trimmedArtist = artistName.trim()
+        val trimmedAlbum = albumTitle.trim()
+
+        val existingArtist = dao.getArtistByName(trimmedArtist)
+        val artistId = existingArtist?.id ?: dao.insertArtist(Artist(name = trimmedArtist))
+
+        val exists = dao.albumExists(trimmedAlbum, artistId)
+
+        if (exists > 0) {
+            onDuplicate()
+            return@launch
+        }
+
         val albumId = dao.insertAlbum(
             Album(
-                title = albumTitle.trim(),
+                title = trimmedAlbum,
                 artistId = artistId,
                 coverUrl = coverUrl,
                 year = year
