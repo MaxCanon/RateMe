@@ -1,10 +1,12 @@
 package com.example.rateme.ui.screens
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -13,11 +15,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.rateme.data.AlbumWithArtistAndSongs
 import com.example.rateme.data.model.Album
+import com.example.rateme.ui.components.ShimmerLoadingList
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -34,9 +38,15 @@ fun HomeScreen(
     showActions: Boolean = true,
     showTopBar: Boolean = true,
     showAddButton: Boolean = true,
-    title: String = "RateMe 🎵"
+    title: String = "RateMe 🎵",
+    isLoading: Boolean = false
 ) {
     var albumToDelete by remember { mutableStateOf<Album?>(null) }
+    var animationsStarted by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        animationsStarted = true
+    }
 
     if (albumToDelete != null && showActions) {
         AlertDialog(
@@ -61,29 +71,19 @@ fun HomeScreen(
         topBar = {
             if (showTopBar) {
                 TopAppBar(
-                    title = {
-                        TextButton(onClick = onHomeClick) {
-                            Text(
-                                title,
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    },
-                    actions = {
-                        if (showActions) {
-                            IconButton(onClick = onRatedClick) { Text("📁") }
-                            IconButton(onClick = onRatingClick) { Text("🏆") }
-                            IconButton(onClick = onThemeToggle) {
-                                Text(if (isDarkTheme) "☀️" else "🌙")
-                            }
-                        }
-                    }
+                    title = { Text(title, style = MaterialTheme.typography.titleMedium) },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent
+                    )
                 )
             }
         }
     ) { padding ->
-        if (albums.isEmpty()) {
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+                ShimmerLoadingList()
+            }
+        } else if (albums.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -94,101 +94,137 @@ fun HomeScreen(
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-                items(albums) { item ->
-                    val ratedCount = item.songs.count { it.rating != null }
-                    val totalCount = item.songs.size
-                    val avgRating = item.songs
-                        .mapNotNull { it.rating }
-                        .takeIf { it.isNotEmpty() }
-                        ?.average()
-                        ?.let { String.format("%.1f", it) }
-                        ?: "—"
+                itemsIndexed(albums) { index, item ->
+                    val delay = index * 80
 
-                    val statusText = if (ratedCount == totalCount && totalCount > 0) {
-                        "Оценены все $totalCount треков"
-                    } else {
-                        "Оценено $ratedCount из $totalCount"
-                    }
-
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                            .combinedClickable(
-                                onClick = { onAlbumClick(item.album.id) },
-                                onLongClick = { if (showActions) albumToDelete = item.album }
-                            ),
-                        shape = MaterialTheme.shapes.large,
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                    AnimatedVisibility(
+                        visible = animationsStarted,
+                        enter = slideInVertically(
+                            initialOffsetY = { it / 2 },
+                            animationSpec = tween(
+                                durationMillis = 400,
+                                delayMillis = delay,
+                                easing = FastOutSlowInEasing
+                            )
+                        ) + fadeIn(
+                            animationSpec = tween(
+                                durationMillis = 400,
+                                delayMillis = delay
+                            )
                         )
                     ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (!item.album.coverUrl.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = item.album.coverUrl,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(56.dp)
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier.size(56.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Filled.Star,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(40.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    item.album.title,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    item.artist.name,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    "⭐ $avgRating/10",
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                                Text(
-                                    statusText,
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-
-                            if (showActions) {
-                                IconButton(onClick = { onAlbumClick(item.album.id) }) {
-                                    Icon(
-                                        Icons.Filled.Edit,
-                                        contentDescription = "Оценить",
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                                IconButton(onClick = { albumToDelete = item.album }) {
-                                    Icon(
-                                        Icons.Filled.Delete,
-                                        contentDescription = "Удалить",
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                            }
-                        }
+                        AlbumCard(
+                            item = item,
+                            showActions = showActions,
+                            onAlbumClick = onAlbumClick,
+                            onDeleteClick = { albumToDelete = item.album },
+                            onEditClick = { onAlbumClick(item.album.id) }
+                        )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AlbumCard(
+    item: AlbumWithArtistAndSongs,
+    showActions: Boolean,
+    onAlbumClick: (Long) -> Unit,
+    onDeleteClick: () -> Unit,
+    onEditClick: () -> Unit
+) {
+    val ratedCount = item.songs.count { it.rating != null }
+    val totalCount = item.songs.size
+    val avgRating = item.songs
+        .mapNotNull { it.rating }
+        .takeIf { it.isNotEmpty() }
+        ?.average()
+        ?.let { String.format("%.1f", it) }
+        ?: "—"
+
+    val statusText = if (ratedCount == totalCount && totalCount > 0) {
+        "Оценены все $totalCount треков"
+    } else {
+        "Оценено $ratedCount из $totalCount"
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .combinedClickable(
+                onClick = { onAlbumClick(item.album.id) },
+                onLongClick = { if (showActions) onDeleteClick() }
+            ),
+        shape = MaterialTheme.shapes.large,
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (!item.album.coverUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = item.album.coverUrl,
+                    contentDescription = null,
+                    modifier = Modifier.size(56.dp)
+                )
+            } else {
+                Box(
+                    modifier = Modifier.size(56.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.Star,
+                        contentDescription = null,
+                        modifier = Modifier.size(40.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    item.album.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    item.artist.name,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "⭐ $avgRating/10",
+                    style = MaterialTheme.typography.labelSmall
+                )
+                Text(
+                    statusText,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+
+            if (showActions) {
+                IconButton(onClick = onEditClick) {
+                    Icon(
+                        Icons.Filled.Edit,
+                        contentDescription = "Оценить",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                IconButton(onClick = onDeleteClick) {
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = "Удалить",
+                        tint = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }

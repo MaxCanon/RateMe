@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.rateme.data.AlbumWithAvgRating
@@ -21,10 +22,10 @@ fun RatingScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Рейтинг альбомов") },
-                navigationIcon = {
-                    TextButton(onClick = onBack) { Text("Назад") }
-                }
+                title = { Text("Рейтинг альбомов", style = MaterialTheme.typography.titleMedium) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
+                )
             )
         }
     ) { padding ->

@@ -3,6 +3,7 @@ package com.example.rateme
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -20,9 +21,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -33,7 +36,7 @@ import com.example.rateme.ui.components.AppBackground
 import com.example.rateme.ui.screens.*
 import com.example.rateme.ui.theme.RateMeTheme
 import com.example.rateme.viewmodel.MainViewModel
-import androidx.navigation.NavGraph.Companion.findStartDestination
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,19 +58,39 @@ class MainActivity : ComponentActivity() {
 fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
     val navController = rememberNavController()
     val viewModel: MainViewModel = viewModel()
+    val context = LocalContext.current
 
     var albums by remember { mutableStateOf<List<AlbumWithArtistAndSongs>>(emptyList()) }
     var ratedAlbums by remember { mutableStateOf<List<AlbumWithArtistAndSongs>>(emptyList()) }
     var albumsByRating by remember { mutableStateOf<List<AlbumWithAvgRating>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(Unit) { viewModel.allAlbums.collect { albums = it } }
+    LaunchedEffect(Unit) {
+        delay(1000) // для демонстрации shimmer, потом убрать
+        viewModel.allAlbums.collect {
+            albums = it
+            isLoading = false
+        }
+    }
     LaunchedEffect(Unit) { viewModel.ratedAlbums.collect { ratedAlbums = it } }
     LaunchedEffect(Unit) { viewModel.albumsByRating.collect { albumsByRating = it } }
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val showBottomBar = currentRoute in listOf("home", "rated", "rating", "add", "search")
+    BackHandler {
+        if (currentRoute != "home") {
+            navController.navigate("home") {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        } else {
+            (context as? android.app.Activity)?.moveTaskToBack(true)
+        }
+    }
+
+    val showBottomBar = currentRoute in listOf("home", "rated", "rating", "add")
 
     Scaffold(
         bottomBar = {
@@ -120,7 +143,7 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                             }
                         }) {
                             Icon(
-                                Icons.Filled.Favorite,
+                                Icons.Filled.Star,
                                 contentDescription = null,
                                 tint = if (currentRoute == "rated") MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
@@ -133,7 +156,7 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                             else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
                     }
-                    // Добавить (выделенная)
+                    // Добавить
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.weight(1f)
@@ -173,7 +196,7 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                             }
                         }) {
                             Icon(
-                                Icons.Filled.Star,
+                                Icons.Filled.Favorite,
                                 contentDescription = null,
                                 tint = if (currentRoute == "rating") MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
@@ -223,8 +246,9 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                     onRatedClick = {},
                     onRatingClick = {},
                     showActions = true,
-                    showTopBar = false,
-                    showAddButton = false
+                    showTopBar = true,
+                    showAddButton = false,
+                    isLoading = isLoading
                 )
             }
             composable("rated") {
@@ -238,9 +262,10 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                     onRatedClick = {},
                     onRatingClick = {},
                     showActions = false,
-                    showTopBar = false,
+                    showTopBar = true,
                     showAddButton = false,
-                    title = "Оценённые альбомы"
+                    title = "Оценённые альбомы",
+                    isLoading = false
                 )
             }
             composable("rating") {
@@ -278,21 +303,11 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
             }
             composable("add") {
                 AddAlbumScreen(
-                    onSave = { artist, album, songs, coverUrl ->
-                        viewModel.addAlbumWithSongs(artist, album, songs, coverUrl)
-                        navController.navigate("home")
-                    },
-                    onBack = {},
-                    onSearchClick = { navController.navigate("search") }
-                )
-            }
-            composable("search") {
-                SearchScreen(
                     onAlbumSelected = { artist, album, coverUrl, tracks, previews, year ->
                         viewModel.addAlbumWithSongs(artist, album, tracks, coverUrl, previews, year)
                         navController.navigate("home")
                     },
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.navigate("home") }
                 )
             }
         }
