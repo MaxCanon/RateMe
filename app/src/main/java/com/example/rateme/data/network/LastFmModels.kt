@@ -45,3 +45,21 @@ data class LastFmImage(
     val url: String?,
     val size: String?
 )
+
+data class SimilarArtistsResponse(
+    val similarartists: SimilarArtists?
+)
+data class SimilarArtists(
+    val artist: List<LastFmArtistSummary>?
+)
+data class LastFmArtistSummary(
+    val name: String?,
+    val image: List<LastFmImage>?
+)
+
+data class TopAlbumsResponse(
+    val topalbums: TopAlbums?
+)
+data class TopAlbums(
+    val album: List<LastFmAlbumSummary>?
+)

@@ -6,6 +6,8 @@ import com.example.rateme.data.model.Tier
 
 object AchievementRepository {
 
+    private const val PREFS_NAME = "achievements"
+
     fun getAllAchievements(): List<Achievement> = listOf(
         Achievement("1", "Первый шаг", "Оценить 1 трек", "🎵", Tier.BRONZE, 1),
         Achievement("2", "Новичок", "Оценить 10 треков", "👶", Tier.BRONZE, 10),
@@ -36,25 +38,39 @@ object AchievementRepository {
         Achievement("27", "Аудиофил", "Прослушать превью 100 раз", "🎧", Tier.LEGENDARY, 100),
     )
 
+    private fun getPrefs(context: Context) = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
     fun loadProgress(context: Context): Map<String, Int> {
-        val prefs = context.getSharedPreferences("achievements", Context.MODE_PRIVATE)
+        val prefs = getPrefs(context)
         return getAllAchievements().associate { it.id to prefs.getInt(it.id, 0) }
     }
 
+    fun getProgress(context: Context, id: String): Int = getPrefs(context).getInt(id, 0)
+
     fun saveProgress(context: Context, id: String, progress: Int) {
-        context.getSharedPreferences("achievements", Context.MODE_PRIVATE)
-            .edit().putInt(id, progress).apply()
+        getPrefs(context).edit().putInt(id, progress).apply()
     }
 
-    fun saveUnlocked(context: Context, id: String, date: String) {
-        context.getSharedPreferences("achievements", Context.MODE_PRIVATE)
-            .edit().putBoolean("${id}_unlocked", true)
+    fun setUnlocked(context: Context, id: String, date: String) {
+        getPrefs(context).edit()
+            .putBoolean("${id}_unlocked", true)
             .putString("${id}_date", date)
             .apply()
     }
 
     fun isUnlocked(context: Context, id: String): Boolean {
-        return context.getSharedPreferences("achievements", Context.MODE_PRIVATE)
-            .getBoolean("${id}_unlocked", false)
+        return getPrefs(context).getBoolean("${id}_unlocked", false)
     }
+
+    fun getString(context: Context, key: String, default: String = ""): String? = getPrefs(context).getString(key, default)
+
+    fun saveString(context: Context, key: String, value: String) {
+        getPrefs(context).edit().putString(key, value).apply()
+    }
+
+    fun saveInt(context: Context, key: String, value: Int) {
+        getPrefs(context).edit().putInt(key, value).apply()
+    }
+
+    fun getInt(context: Context, key: String, default: Int = 0): Int = getPrefs(context).getInt(key, default)
 }

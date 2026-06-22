@@ -9,10 +9,9 @@ object AchievementManager {
     private val sdf = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
 
     fun increment(context: Context, achId: String, amount: Int = 1, onNewAchievement: (Achievement) -> Unit) {
-        val prefs = context.getSharedPreferences("achievements", Context.MODE_PRIVATE)
-        val current = prefs.getInt(achId, 0)
+        val current = AchievementRepository.getProgress(context, achId)
         val newProgress = current + amount
-        prefs.edit().putInt(achId, newProgress).apply()
+        AchievementRepository.saveProgress(context, achId, newProgress)
         
         // Re-run check to see if unlocked
         checkAndUpdate(context, onNewAchievement = onNewAchievement)
@@ -30,33 +29,30 @@ object AchievementManager {
         onNewAchievement: (Achievement) -> Unit
     ) {
         val achievements = AchievementRepository.getAllAchievements()
-        val prefs = context.getSharedPreferences("achievements", Context.MODE_PRIVATE)
 
         // Streak logic
-        val lastRatingDate = prefs.getString("last_rating_date", "")
+        val lastRatingDate = AchievementRepository.getString(context, "last_rating_date") ?: ""
         val today = sdf.format(Date())
         if (totalRated > -1 && lastRatingDate != today) {
             val calendar = Calendar.getInstance()
             calendar.add(Calendar.DATE, -1)
             val yesterday = sdf.format(calendar.time)
             
-            var streak = prefs.getInt("rating_streak", 0)
+            var streak = AchievementRepository.getInt(context, "rating_streak")
             if (lastRatingDate == yesterday) {
                 streak++
             } else {
                 streak = 1
             }
-            prefs.edit()
-                .putString("last_rating_date", today)
-                .putInt("rating_streak", streak)
-                .apply()
+            AchievementRepository.saveString(context, "last_rating_date", today)
+            AchievementRepository.saveInt(context, "rating_streak", streak)
         }
-        val currentStreak = prefs.getInt("rating_streak", 0)
+        val currentStreak = AchievementRepository.getInt(context, "rating_streak")
 
         for (ach in achievements) {
-            if (prefs.getBoolean("${ach.id}_unlocked", false)) continue
+            if (AchievementRepository.isUnlocked(context, ach.id)) continue
 
-            var progress = prefs.getInt(ach.id, 0)
+            var progress = AchievementRepository.getProgress(context, ach.id)
 
             when (ach.id) {
                 "1" -> if (totalRated >= 1) progress = 1
@@ -84,7 +80,7 @@ object AchievementManager {
                 "20" -> {
                     val hasAlbumWithSeven = albumsList?.any { album -> 
                         val ratings = album.songs.mapNotNull { it.rating }
-                        ratings.isNotEmpty() && String.format("%.1f", ratings.average()) == "7.0"
+                        ratings.isNotEmpty() && String.format(Locale.getDefault(), "%.1f", ratings.average()) == "7.0"
                     } ?: false
                     if (hasAlbumWithSeven) progress = 1
                 }
@@ -102,17 +98,15 @@ object AchievementManager {
                     } ?: false
                     if (hasPerfectAlbum) progress = 1
                 }
+                // manual increments: "7" (Bilingua), "14" (Domosed), "19" (Statistic), "27" (Audiophile)
             }
 
-            if (progress > prefs.getInt(ach.id, 0)) {
-                prefs.edit().putInt(ach.id, progress).apply()
+            if (progress > AchievementRepository.getProgress(context, ach.id)) {
+                AchievementRepository.saveProgress(context, ach.id, progress)
             }
 
             if (progress >= ach.goal) {
-                prefs.edit()
-                    .putBoolean("${ach.id}_unlocked", true)
-                    .putString("${ach.id}_date", sdf.format(Date()))
-                    .apply()
+                AchievementRepository.setUnlocked(context, ach.id, sdf.format(Date()))
                 onNewAchievement(ach)
             }
         }

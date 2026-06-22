@@ -1,7 +1,6 @@
 package com.example.rateme.viewmodel
 
 import android.app.Application
-import android.content.Context
 import androidx.lifecycle.*
 import com.example.rateme.data.AchievementManager
 import com.example.rateme.data.AlbumDao
@@ -12,9 +11,11 @@ import com.example.rateme.data.model.Achievement
 import com.example.rateme.data.model.Album
 import com.example.rateme.data.model.Artist
 import com.example.rateme.data.model.Song
+import com.example.rateme.data.network.ApiClient
+import com.example.rateme.data.network.LastFmAlbumSummary
+import com.example.rateme.data.ApiKey
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -26,8 +27,59 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val albumsByRating: Flow<List<AlbumWithAvgRating>> = dao.getAlbumsByRating()
     val ratedAlbums: Flow<List<AlbumWithArtistAndSongs>> = dao.getRatedAlbums()
 
+    private val _recommendations = MutableStateFlow<List<LastFmAlbumSummary>>(emptyList())
+    val recommendations: StateFlow<List<LastFmAlbumSummary>> = _recommendations.asStateFlow()
+
     private val _newAchievement = MutableLiveData<Achievement?>(null)
     val newAchievement: LiveData<Achievement?> = _newAchievement
+
+    init {
+        loadRecommendations()
+    }
+
+    fun loadRecommendations() = viewModelScope.launch {
+        try {
+            val albums = dao.getAllAlbumsWithSongs().first()
+            if (albums.isEmpty()) return@launch
+
+            // Find top rated artists
+            val topArtists = albums
+                .filter { it.songs.any { s -> s.rating != null } }
+                .groupBy { it.artist.name }
+                .mapValues { entry -> 
+                    entry.value.flatMap { it.songs }.mapNotNull { it.rating }.average()
+                }
+                .filterValues { it >= 7.0 }
+                .keys.toList()
+
+            if (topArtists.isEmpty()) return@launch
+
+            val randomArtist = topArtists.random()
+            val lastFmApi = ApiClient.lastFmApi
+
+            // Get similar artists
+            val similarResponse = lastFmApi.getSimilarArtists(randomArtist, ApiKey.LAST_FM_API_KEY, limit = 5)
+            val similarArtists = similarResponse.similarartists?.artist?.mapNotNull { it.name } ?: emptyList()
+
+            if (similarArtists.isEmpty()) return@launch
+
+            val recommendedAlbums = mutableListOf<LastFmAlbumSummary>()
+            similarArtists.shuffled().take(3).forEach { artist ->
+                val topAlbumsResponse = lastFmApi.getTopAlbums(artist, ApiKey.LAST_FM_API_KEY, limit = 3)
+                topAlbumsResponse.topalbums?.album?.let { recommendedAlbums.addAll(it) }
+            }
+
+            // Filter out already added albums
+            val existingTitles = albums.map { it.album.title.lowercase() }.toSet()
+            _recommendations.value = recommendedAlbums
+                .filter { it.name != null && it.name.lowercase() !in existingTitles }
+                .distinctBy { it.name?.lowercase() }
+                .take(10)
+
+        } catch (e: Exception) {
+            android.util.Log.e("MainViewModel", "Failed to load recommendations: ${e.message}")
+        }
+    }
 
     fun clearAchievement() { _newAchievement.value = null }
 
@@ -47,8 +99,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun updateRating(songId: Long, rating: Int, context: Context, isDarkTheme: Boolean) = viewModelScope.launch {
-        android.util.Log.d("RATEME", "updateRating called: songId=$songId, rating=$rating")
+    fun updateRating(songId: Long, rating: Int, isDarkTheme: Boolean) = viewModelScope.launch {
         dao.updateRating(songId, rating)
 
         val albumsList = withContext(Dispatchers.IO) {
@@ -62,7 +113,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val fullAlbums = albumsList.count { it.songs.all { s -> s.rating != null } }
 
         AchievementManager.checkAndUpdate(
-            context = context,
+            context = getApplication<Application>().applicationContext,
             totalRated = totalRated,
             totalAlbums = totalAlbums,
             uniqueArtists = uniqueArtists,
@@ -73,8 +124,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ) { ach -> _newAchievement.postValue(ach) }
     }
 
-    fun incrementAchievement(context: Context, achId: String) {
-        AchievementManager.increment(context, achId) { ach ->
+    fun incrementAchievement(achId: String) {
+        AchievementManager.increment(getApplication<Application>().applicationContext, achId) { ach ->
             _newAchievement.postValue(ach)
         }
     }

@@ -17,9 +17,9 @@
     <string name="delete_confirm">Удалить</string>
     <string name="cancel">Отмена</string>
     <string name="rated_all">Оценены все %d треков</string>
-    <string name="rated_count">Оценено %d из %d</string>
+    <string name="rated_count">Оценено %1$d из %2$d треков</string>
     <string name="share">Поделиться</string>
-    <string name="done">Готово ✓</string>
+    <string name="done">Готово</string>
     <string name="back">←</string>
     <string name="edit">Оценить</string>
     <string name="listen_30s">▶ Прослушать 30с</string>

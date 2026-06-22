@@ -24,10 +24,11 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddAlbumScreen(
+    initialQuery: String? = null,
     onAlbumSelected: (artist: String, album: String, coverUrl: String?, tracks: List<String>, previews: Map<String, String>, year: String?) -> Unit,
     onBack: () -> Unit
 ) {
-    var query by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf(initialQuery ?: "") }
     var results by remember { mutableStateOf<List<LastFmAlbumSummary>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -60,6 +61,12 @@ fun AddAlbumScreen(
                 results = emptyList()
             }
             isLoading = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (!initialQuery.isNullOrBlank()) {
+            doSearch(initialQuery)
         }
     }
 

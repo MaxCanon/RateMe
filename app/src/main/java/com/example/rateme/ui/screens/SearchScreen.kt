@@ -63,9 +63,7 @@ fun SearchScreen(
             isSearching = true
             errorMessage = null
             try {
-                Log.d("SearchScreen", "Поиск: $q")
                 val response = lastFmApi.searchAlbum(q, ApiKey.LAST_FM_API_KEY)
-                Log.d("SearchScreen", "Ответ: ${response.results?.albumMatches?.album?.size} альбомов")
                 results = response.results?.albumMatches?.album ?: emptyList()
                 if (results.isEmpty()) errorMessage = context.getString(R.string.nothing_found)
                 else {

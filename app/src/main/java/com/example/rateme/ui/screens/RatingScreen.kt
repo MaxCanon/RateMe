@@ -1,6 +1,8 @@
 package com.example.rateme.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -16,19 +18,57 @@ import androidx.compose.ui.unit.dp
 import com.example.rateme.R
 import com.example.rateme.data.AlbumWithAvgRating
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun RatingScreen(
     albums: List<AlbumWithAvgRating>,
     onBack: () -> Unit,
-    onAlbumClick: (Long) -> Unit
+    onAlbumClick: (Long) -> Unit,
+    onDeleteClick: (Long) -> Unit = {}
 ) {
+    var albumIdToDelete by remember { mutableStateOf<Long?>(null) }
+    val albumTitleToDelete = remember(albumIdToDelete) { albums.find { it.id == albumIdToDelete }?.title }
+
+    if (albumIdToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { albumIdToDelete = null },
+            title = { Text(stringResource(R.string.delete_confirm)) },
+            text = { Text("Вы действительно хотите удалить альбом \"$albumTitleToDelete\"?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        albumIdToDelete?.let { onDeleteClick(it) }
+                        albumIdToDelete = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text(stringResource(R.string.delete_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { albumIdToDelete = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.rating_title), style = MaterialTheme.typography.titleMedium) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
+            Surface(
+                color = Color.Transparent,
+                modifier = Modifier.fillMaxWidth().statusBarsPadding()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Text(stringResource(R.string.rating_title), style = MaterialTheme.typography.titleMedium)
+                }
+            }
         }
     ) { padding ->
         if (albums.isEmpty()) {
@@ -39,22 +79,35 @@ fun RatingScreen(
                 Text(stringResource(R.string.no_rated_albums))
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentPadding = PaddingValues(bottom = 80.dp)
+            ) {
                 itemsIndexed(albums) { index, album ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp, vertical = 4.dp)
-                            .clickable { onAlbumClick(album.id) },
+                            .combinedClickable(
+                                onClick = { onAlbumClick(album.id) },
+                                onLongClick = { albumIdToDelete = album.id }
+                            ),
                         shape = MaterialTheme.shapes.large,
                         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
                     ) {
                         Row(modifier = Modifier.padding(16.dp)) {
+                            val rankColor = when (index) {
+                                0 -> Color(0xFFFFD700) // Gold
+                                1 -> Color(0xFFC0C0C0) // Silver
+                                2 -> Color(0xFFCD7F32) // Bronze
+                                else -> MaterialTheme.colorScheme.onSurface
+                            }
                             Text(
                                 "${index + 1}.",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
+                                color = rankColor,
                                 modifier = Modifier.width(40.dp)
                             )
                             Column {

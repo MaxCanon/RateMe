@@ -34,13 +34,23 @@ private val LightColorScheme = lightColorScheme(
 @Composable
 fun RateMeTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    seedColor: Color? = null,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val baseScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val colorScheme = if (seedColor != null) {
+        baseScheme.copy(
+            primary = seedColor,
+            secondary = seedColor,
+            outline = seedColor.copy(alpha = 0.5f)
+        )
+    } else {
+        baseScheme
+    }
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography(),
+        typography = Typography,
         content = content
     )
 }

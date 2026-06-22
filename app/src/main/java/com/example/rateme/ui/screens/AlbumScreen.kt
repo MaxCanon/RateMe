@@ -1,110 +1,210 @@
 package com.example.rateme.ui.screens
 
 import android.content.Intent
-import androidx.compose.animation.core.*
+import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.rateme.R
 import com.example.rateme.data.AlbumWithArtistAndSongs
 import com.example.rateme.data.model.Song
+import com.example.rateme.ui.theme.RateMeTheme
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun AlbumScreen(
     albumWithSongs: AlbumWithArtistAndSongs?,
     onBack: () -> Unit,
     onRatingChanged: (Long, Int) -> Unit,
     onShareClick: (Intent) -> Unit,
-    readOnly: Boolean = false
+    onTrackListen: () -> Unit,
+    readOnly: Boolean = false,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedContentScope: AnimatedContentScope
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     if (albumWithSongs == null) {
         Box(modifier = Modifier.fillMaxSize()) { CircularProgressIndicator() }
         return
     }
 
     var playingSongId by remember { mutableStateOf<Long?>(null) }
+    var seedColor by remember { mutableStateOf<Color?>(null) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { MarqueeText(text = albumWithSongs.album.title, modifier = Modifier.fillMaxWidth()) },
-                navigationIcon = { TextButton(onClick = onBack) { Text(stringResource(R.string.back), style = MaterialTheme.typography.headlineSmall) } },
-                actions = {
-                    IconButton(onClick = {
-                        val shareText = buildString {
-                            appendLine("🎵 ${albumWithSongs.album.title} — ${albumWithSongs.artist.name}")
-                            albumWithSongs.songs.forEachIndexed { i, s ->
-                                val r = s.rating?.toString() ?: "—"
-                                appendLine("${i + 1}. ${s.title} — $r/10")
-                            }
-                            val avg = albumWithSongs.songs.mapNotNull { it.rating }.average().let {
-                                if (it.isNaN()) "—" else String.format(java.util.Locale.getDefault(), "%.1f", it)
-                            }
-                            appendLine()
-                            appendLine(context.getString(R.string.avg_rating_value, avg))
-                        }
-                        onShareClick(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, shareText) })
-                    }) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.share)) }
-                    TextButton(onClick = onBack) { Text(stringResource(R.string.done)) }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
-        }
-    ) { padding ->
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-            item {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(albumWithSongs.artist.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                    if (readOnly) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(stringResource(R.string.readonly_warning), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(stringResource(R.string.tracks_count, albumWithSongs.songs.size), style = MaterialTheme.typography.bodySmall)
-                }
-            }
-            itemsIndexed(albumWithSongs.songs) { index, song ->
-                SongRow(
-                    song = song, 
-                    trackNumber = index + 1, 
-                    onRatingChanged = { rating: Int -> onRatingChanged(song.id, rating) }, 
-                    readOnly = readOnly,
-                    isPlaying = playingSongId == song.id,
-                    onTogglePlay = { 
-                        if (playingSongId == song.id) playingSongId = null
-                        else playingSongId = song.id
-                    }
+    RateMeTheme(seedColor = seedColor) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Blurred Background
+            if (!albumWithSongs.album.coverUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = albumWithSongs.album.coverUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .blur(40.dp),
+                    contentScale = ContentScale.Crop,
+                    alpha = 0.4f
                 )
             }
-            item { Spacer(modifier = Modifier.height(16.dp)) }
+            
+            // Gradient overlay to ensure readability
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.7f),
+                                MaterialTheme.colorScheme.background
+                            )
+                        )
+                    )
+            )
+
+            Scaffold(
+                containerColor = Color.Transparent,
+                topBar = {
+                    Surface(
+                        color = Color.Transparent,
+                        modifier = Modifier.fillMaxWidth().statusBarsPadding()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .padding(horizontal = 4.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = onBack) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = stringResource(R.string.back)
+                                )
+                            }
+                            Text(
+                                text = albumWithSongs.album.title,
+                                modifier = Modifier.weight(1f).basicMarquee(),
+                                maxLines = 1,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            IconButton(onClick = {
+                                val shareText = buildString {
+                                    appendLine("🎵 ${albumWithSongs.album.title} — ${albumWithSongs.artist.name}")
+                                    albumWithSongs.songs.forEachIndexed { i, s ->
+                                        val r = s.rating?.toString() ?: "—"
+                                        appendLine("${i + 1}. ${s.title} — $r/10")
+                                    }
+                                    val avg = albumWithSongs.songs.mapNotNull { it.rating }.average().let {
+                                        if (it.isNaN()) "—" else String.format(java.util.Locale.getDefault(), "%.1f", it)
+                                    }
+                                    appendLine()
+                                    appendLine(context.getString(R.string.avg_rating_value, avg))
+                                }
+                                onShareClick(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, shareText) })
+                            }) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.share)) }
+                            TextButton(onClick = onBack) { Text(stringResource(R.string.done)) }
+                        }
+                    }
+                }
+            ) { padding ->
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(padding),
+                    contentPadding = PaddingValues(bottom = 80.dp)
+                ) {
+                    item {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            with(sharedTransitionScope) {
+                                if (!albumWithSongs.album.coverUrl.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                            .data(albumWithSongs.album.coverUrl)
+                                            .allowHardware(false)
+                                            .build(),
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(200.dp)
+                                            .sharedElement(
+                                                rememberSharedContentState(key = "album-cover-${albumWithSongs.album.id}"),
+                                                animatedVisibilityScope = animatedContentScope
+                                            ),
+                                        onSuccess = { result ->
+                                            val bitmap = (result.result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                                            bitmap?.let {
+                                                androidx.palette.graphics.Palette.from(it).generate().vibrantSwatch?.rgb?.let { rgb ->
+                                                    seedColor = Color(rgb)
+                                                }
+                                            }
+                                        }
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(200.dp)
+                                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                                            .sharedElement(
+                                                rememberSharedContentState(key = "album-cover-${albumWithSongs.album.id}"),
+                                                animatedVisibilityScope = animatedContentScope
+                                            ),
+                                        contentAlignment = androidx.compose.ui.Alignment.Center
+                                    ) {
+                                        Icon(Icons.Filled.Album, contentDescription = null, modifier = Modifier.size(100.dp), tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(albumWithSongs.artist.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                            if (readOnly) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(stringResource(R.string.readonly_warning), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(stringResource(R.string.tracks_count, albumWithSongs.songs.size), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    itemsIndexed(albumWithSongs.songs) { index, song ->
+                        SongRow(
+                            song = song, 
+                            trackNumber = index + 1, 
+                            onRatingChanged = { rating: Int -> onRatingChanged(song.id, rating) }, 
+                            readOnly = readOnly,
+                            isPlaying = playingSongId == song.id,
+                            onTogglePlay = { 
+                                if (playingSongId == song.id) playingSongId = null
+                                else {
+                                    onTrackListen()
+                                    playingSongId = song.id
+                                }
+                            }
+                        )
+                    }
+                    item { Spacer(modifier = Modifier.height(16.dp)) }
+                }
+            }
         }
     }
 }
 
-@Composable
-fun MarqueeText(text: String, modifier: Modifier = Modifier) {
-    val infiniteTransition = rememberInfiniteTransition()
-    val offset by infiniteTransition.animateFloat(initialValue = 0f, targetValue = -200f,
-        animationSpec = infiniteRepeatable(animation = tween(durationMillis = 5000, easing = LinearEasing), repeatMode = RepeatMode.Restart))
-    Box(modifier = modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(0.dp))) {
-        Text(text = text, maxLines = 1, overflow = TextOverflow.Visible, softWrap = false, modifier = Modifier.offset { IntOffset(offset.toInt(), 0) })
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

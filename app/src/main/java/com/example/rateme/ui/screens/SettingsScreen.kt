@@ -62,11 +62,10 @@ fun SettingsScreen(
                             expandedLanguage = false
                             prefs.edit()
                                 .putString("language", code)
-                                .putBoolean("darkTheme", isDarkTheme)
                                 .apply()
-                            val intent = android.content.Intent(context, context::class.java)
-                            context.startActivity(intent)
-                            (context as android.app.Activity).finish()
+                            
+                            val appLocale: androidx.core.os.LocaleListCompat = androidx.core.os.LocaleListCompat.forLanguageTags(code)
+                            androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(appLocale)
                         })
                     }
                 }

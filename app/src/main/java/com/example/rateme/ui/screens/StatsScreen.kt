@@ -45,7 +45,8 @@ fun StatsScreen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 80.dp)
         ) {
             item { StatCard(stringResource(R.string.total_albums), "$totalAlbums") }
             item { StatCard(stringResource(R.string.total_songs), "$totalSongs") }

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -14,7 +16,14 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
-        buildConfigField("String", "LASTFM_API_KEY", "\"06a33b4134631964a79497191893ab83\"")
+
+        val localProperties = Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localProperties.load(localPropertiesFile.inputStream())
+        }
+        val apiKey = localProperties.getProperty("LASTFM_API_KEY") ?: ""
+        buildConfigField("String", "LASTFM_API_KEY", "\"$apiKey\"")
     }
 
     buildTypes {
@@ -43,6 +52,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.palette.ktx)
+    implementation(libs.androidx.compose.ui.text.google.fonts)
 
     // Room (база данных)
     val roomVersion = "2.7.1"

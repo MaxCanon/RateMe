@@ -2,10 +2,14 @@ package com.example.rateme
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -37,19 +41,11 @@ import com.example.rateme.ui.screens.*
 import com.example.rateme.ui.theme.RateMeTheme
 import com.example.rateme.viewmodel.MainViewModel
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val prefs = getSharedPreferences("settings", MODE_PRIVATE)
-        val lang = prefs.getString("language", "ru") ?: "ru"
-        val locale = java.util.Locale(lang)
-        java.util.Locale.setDefault(locale)
-        val config = resources.configuration
-        config.setLocale(locale)
-        @Suppress("DEPRECATION")
-        resources.updateConfiguration(config, resources.displayMetrics)
-
         val isDark = prefs.getBoolean("darkTheme", true)
 
         enableEdgeToEdge()
@@ -71,6 +67,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
     val navController = rememberNavController()
@@ -80,6 +77,7 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
     var albums by remember { mutableStateOf<List<AlbumWithArtistAndSongs>>(emptyList()) }
     var ratedAlbums by remember { mutableStateOf<List<AlbumWithArtistAndSongs>>(emptyList()) }
     var albumsByRating by remember { mutableStateOf<List<AlbumWithAvgRating>>(emptyList()) }
+    val recommendations by viewModel.recommendations.collectAsState()
     var isLoading by remember { mutableStateOf(true) }
 
     val newAchievement by viewModel.newAchievement.observeAsState(initial = null)
@@ -98,7 +96,7 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
     LaunchedEffect(Unit) { viewModel.albumsByRating.collect { albumsByRating = it } }
 
     LaunchedEffect(Unit) {
-        viewModel.incrementAchievement(appContext, "14")
+        viewModel.incrementAchievement("14")
     }
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -120,96 +118,142 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
-                        .navigationBarsPadding().padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                    tonalElevation = 8.dp
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                        IconButton(onClick = { navController.navigate("home") { popUpTo("home") { inclusive = true }; launchSingleTop = true } }) {
-                            Icon(Icons.Filled.Home, contentDescription = null, tint = if (currentRoute == "home") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                            IconButton(onClick = { navController.navigate("home") { popUpTo("home") { inclusive = true }; launchSingleTop = true } }) {
+                                Icon(Icons.Filled.Home, contentDescription = null, tint = if (currentRoute == "home") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                            }
+                            Text(stringResource(R.string.home), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "home") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         }
-                        Text(stringResource(R.string.home), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "home") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                        IconButton(onClick = { navController.navigate("rated") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }) {
-                            Icon(Icons.Filled.ThumbUp, contentDescription = null, tint = if (currentRoute == "rated") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                            IconButton(onClick = { navController.navigate("rated") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }) {
+                                Icon(Icons.Filled.ThumbUp, contentDescription = null, tint = if (currentRoute == "rated") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                            }
+                            Text(stringResource(R.string.ratings), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "rated") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         }
-                        Text(stringResource(R.string.ratings), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "rated") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                        FloatingActionButton(onClick = { navController.navigate("add") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } },
-                            modifier = Modifier.size(48.dp).shadow(8.dp, CircleShape), containerColor = MaterialTheme.colorScheme.primary, shape = CircleShape) {
-                            Icon(Icons.Filled.Add, contentDescription = "Добавить", tint = MaterialTheme.colorScheme.onPrimary)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                            FloatingActionButton(onClick = { navController.navigate("add?query=") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } },
+                                modifier = Modifier.size(48.dp).shadow(8.dp, CircleShape), containerColor = MaterialTheme.colorScheme.primary, shape = CircleShape) {
+                                Icon(Icons.Filled.Add, contentDescription = "Добавить", tint = MaterialTheme.colorScheme.onPrimary)
+                            }
+                            Text(stringResource(R.string.add), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         }
-                        Text(stringResource(R.string.add), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                        IconButton(onClick = { navController.navigate("rating") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }) {
-                            Icon(Icons.Filled.Favorite, contentDescription = null, tint = if (currentRoute == "rating") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                            IconButton(onClick = { navController.navigate("rating") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }) {
+                                Icon(Icons.Filled.Favorite, contentDescription = null, tint = if (currentRoute == "rating") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                            }
+                            Text(stringResource(R.string.rating), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "rating") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         }
-                        Text(stringResource(R.string.rating), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "rating") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                        IconButton(onClick = { navController.navigate("stats") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }) {
-                            Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = if (currentRoute == "stats") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                            IconButton(onClick = { navController.navigate("stats") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }) {
+                                Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = if (currentRoute == "stats") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                            }
+                            Text(stringResource(R.string.achievements), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "stats") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         }
-                        Text(stringResource(R.string.achievements), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "stats") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     }
                 }
             }
         }
     ) { innerPadding ->
-        NavHost(navController = navController, startDestination = "home", modifier = Modifier.padding(innerPadding)) {
-            composable("home") {
-                HomeScreen(albums = albums, onAlbumClick = { navController.navigate("album/$it") }, onAddClick = {}, onDeleteClick = { viewModel.deleteAlbum(it) },
-                    isDarkTheme = isDarkTheme, onThemeToggle = {}, onRatedClick = {}, onRatingClick = {},
-                    showActions = true, showTopBar = true, showAddButton = false, isLoading = isLoading,
-                    onSettingsClick = { navController.navigate("settings") })
-            }
-            composable("rated") {
-                HomeScreen(albums = ratedAlbums, onAlbumClick = { navController.navigate("album/$it") }, onAddClick = {}, onDeleteClick = {},
-                    isDarkTheme = isDarkTheme, onThemeToggle = {}, onRatedClick = {}, onRatingClick = {},
-                    showActions = false, showTopBar = true, showAddButton = false, title = stringResource(R.string.evaluated_albums), isLoading = false)
-            }
-            composable("rating") {
-                RatingScreen(albums = albumsByRating, onBack = { navController.navigate("home") }, onAlbumClick = { navController.navigate("album_view/$it") })
-            }
-            composable("album/{albumId}") { backStackEntry ->
-                val id = backStackEntry.arguments?.getString("albumId")?.toLongOrNull()
-                AlbumScreen(albumWithSongs = albums.find { it.album.id == id }, onBack = { navController.navigate("home") },
-                    onRatingChanged = { songId, rating -> viewModel.updateRating(songId, rating, appContext, isDarkTheme) },
-                    onShareClick = { navController.context.startActivity(Intent.createChooser(it, "Поделиться")) }, readOnly = false)
-            }
-            composable("album_view/{albumId}") { backStackEntry ->
-                val id = backStackEntry.arguments?.getString("albumId")?.toLongOrNull()
-                AlbumScreen(albumWithSongs = albums.find { it.album.id == id }, onBack = { navController.navigate("rating") },
-                    onRatingChanged = { _, _ -> },
-                    onShareClick = { navController.context.startActivity(Intent.createChooser(it, "Поделиться")) }, readOnly = true)
-            }
-            composable("add") {
-                AddAlbumScreen(onAlbumSelected = { artist, album, coverUrl, tracks, previews, year ->
-                    viewModel.addAlbumWithSongs(artist, album, tracks, coverUrl, previews, year,
-                        onDuplicate = { android.widget.Toast.makeText(appContext, appContext.getString(R.string.duplicate_album), android.widget.Toast.LENGTH_SHORT).show() })
-                    navController.navigate("home")
-                }, onBack = { navController.navigate("home") })
-            }
-            composable("stats") {
-                AchievementsScreen(onBack = { navController.navigate("home") })
-            }
-            composable("settings") {
-                SettingsScreen(isDarkTheme = isDarkTheme, onThemeToggle = onThemeToggle,
-                    onBack = { navController.navigate("home") }, onStatsClick = { 
-                        viewModel.incrementAchievement(appContext, "19")
-                        navController.navigate("oldstats") 
-                    }, onLanguageChange = {
-                        viewModel.incrementAchievement(appContext, "7")
-                    })
-            }
-            composable("oldstats") {
-                StatsScreen(albums = albums, onBack = { navController.navigate("settings") })
+        SharedTransitionLayout {
+            NavHost(
+                navController = navController, 
+                startDestination = "home", 
+                modifier = Modifier.padding(top = innerPadding.calculateTopPadding())
+            ) {
+                composable("home") {
+                    HomeScreen(albums = albums, onAlbumClick = { navController.navigate("album/$it") }, onAddClick = {}, onDeleteClick = { viewModel.deleteAlbum(it) },
+                        isDarkTheme = isDarkTheme, onThemeToggle = {}, onRatedClick = {}, onRatingClick = {},
+                        showActions = true, showTopBar = true, showAddButton = false, isLoading = isLoading,
+                        onSettingsClick = { navController.navigate("settings") },
+                        sharedTransitionScope = this@SharedTransitionLayout,
+                        animatedContentScope = this@composable,
+                        recommendations = recommendations,
+                        onRecommendationClick = { item ->
+                            navController.navigate("add?query=${item.artist} ${item.name}")
+                        })
+                }
+                composable("rated") {
+                    HomeScreen(albums = ratedAlbums, onAlbumClick = { navController.navigate("album/$it") }, onAddClick = {}, onDeleteClick = { viewModel.deleteAlbum(it) },
+                        isDarkTheme = isDarkTheme, onThemeToggle = {}, onRatedClick = {}, onRatingClick = {},
+                        showActions = false, showTopBar = true, showAddButton = false, title = stringResource(R.string.evaluated_albums), isLoading = false, isDashboard = false,
+                        sharedTransitionScope = this@SharedTransitionLayout,
+                        animatedContentScope = this@composable)
+                }
+                composable("rating") {
+                    RatingScreen(
+                        albums = albumsByRating, 
+                        onBack = { navController.navigate("home") }, 
+                        onAlbumClick = { navController.navigate("album_view/$it") },
+                        onDeleteClick = { id ->
+                            albums.find { it.album.id == id }?.let { viewModel.deleteAlbum(it.album) }
+                        }
+                    )
+                }
+                composable("album/{albumId}") { backStackEntry ->
+                    val id = backStackEntry.arguments?.getString("albumId")?.toLongOrNull()
+                    AlbumScreen(albumWithSongs = albums.find { it.album.id == id }, onBack = { navController.navigate("home") },
+                        onRatingChanged = { songId, rating -> viewModel.updateRating(songId, rating, isDarkTheme) },
+                        onShareClick = { navController.context.startActivity(Intent.createChooser(it, "Поделиться")) }, 
+                        onTrackListen = { viewModel.incrementAchievement("27") },
+                        readOnly = false,
+                        sharedTransitionScope = this@SharedTransitionLayout,
+                        animatedContentScope = this@composable)
+                }
+                composable("album_view/{albumId}") { backStackEntry ->
+                    val id = backStackEntry.arguments?.getString("albumId")?.toLongOrNull()
+                    AlbumScreen(albumWithSongs = albums.find { it.album.id == id }, onBack = { navController.navigate("rating") },
+                        onRatingChanged = { _, _ -> },
+                        onShareClick = { navController.context.startActivity(Intent.createChooser(it, "Поделиться")) }, 
+                        onTrackListen = { viewModel.incrementAchievement("27") },
+                        readOnly = true,
+                        sharedTransitionScope = this@SharedTransitionLayout,
+                        animatedContentScope = this@composable)
+                }
+                composable(
+                    "add?query={query}",
+                    arguments = listOf(androidx.navigation.navArgument("query") { defaultValue = ""; nullable = true })
+                ) { backStackEntry ->
+                    val initialQuery = backStackEntry.arguments?.getString("query")
+                    AddAlbumScreen(
+                        initialQuery = initialQuery,
+                        onAlbumSelected = { artist, album, coverUrl, tracks, previews, year ->
+                            viewModel.addAlbumWithSongs(artist, album, tracks, coverUrl, previews, year,
+                                onDuplicate = { android.widget.Toast.makeText(appContext, appContext.getString(R.string.duplicate_album), android.widget.Toast.LENGTH_SHORT).show() })
+                            navController.navigate("home") {
+                                popUpTo("home") { inclusive = true }
+                            }
+                        }, 
+                        onBack = { navController.navigate("home") }
+                    )
+                }
+                composable("stats") {
+                    AchievementsScreen(onBack = { navController.navigate("home") })
+                }
+                composable("settings") {
+                    SettingsScreen(isDarkTheme = isDarkTheme, onThemeToggle = onThemeToggle,
+                        onBack = { navController.navigate("home") }, onStatsClick = { 
+                            viewModel.incrementAchievement("19")
+                            navController.navigate("oldstats") 
+                        }, onLanguageChange = {
+                            viewModel.incrementAchievement("7")
+                        })
+                }
+                composable("oldstats") {
+                    StatsScreen(albums = albums, onBack = { navController.navigate("settings") })
+                }
             }
         }
     }

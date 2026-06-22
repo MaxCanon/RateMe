@@ -1,29 +1,37 @@
 package com.example.rateme.ui.screens
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.rateme.R
 import com.example.rateme.data.AlbumWithArtistAndSongs
 import com.example.rateme.data.model.Album
+import com.example.rateme.data.network.LastFmAlbumSummary
 import com.example.rateme.ui.components.ShimmerLoadingList
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun HomeScreen(
     albums: List<AlbumWithArtistAndSongs>,
@@ -40,52 +48,82 @@ fun HomeScreen(
     showTopBar: Boolean = true,
     showAddButton: Boolean = true,
     title: String = "RateMe",
-    isLoading: Boolean = false
+    isLoading: Boolean = false,
+    isDashboard: Boolean = true,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedContentScope: AnimatedContentScope,
+    recommendations: List<LastFmAlbumSummary> = emptyList(),
+    onRecommendationClick: (LastFmAlbumSummary) -> Unit = {}
 ) {
     var albumToDelete by remember { mutableStateOf<Album?>(null) }
-    var animationsStarted by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { animationsStarted = true }
-
-    if (albumToDelete != null && showActions) {
+    if (albumToDelete != null) {
         AlertDialog(
             onDismissRequest = { albumToDelete = null },
-            title = { Text(stringResource(R.string.delete_album_title)) },
-            text = { Text(stringResource(R.string.delete_album_text)) },
+            title = { Text(stringResource(R.string.delete_confirm)) },
+            text = { Text("Вы действительно хотите удалить альбом \"${albumToDelete?.title}\"?") },
             confirmButton = {
-                TextButton(onClick = {
-                    onDeleteClick(albumToDelete!!)
-                    albumToDelete = null
-                }) {
-                    Text(stringResource(R.string.delete_confirm), color = MaterialTheme.colorScheme.error)
+                TextButton(
+                    onClick = {
+                        albumToDelete?.let { onDeleteClick(it) }
+                        albumToDelete = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text(stringResource(R.string.delete_confirm))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { albumToDelete = null }) { Text(stringResource(R.string.cancel)) }
+                TextButton(onClick = { albumToDelete = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
             }
         )
+    }
+
+    val inProgress = remember(albums) {
+        albums.filter { album ->
+            val ratedCount = album.songs.count { it.rating != null }
+            ratedCount > 0 && (ratedCount < album.songs.size)
+        }
+    }
+
+    val topOfTheMonth = remember(albums) {
+        albums.filter { album ->
+            val ratedCount = album.songs.count { it.rating != null }
+            ratedCount == album.songs.size && album.songs.isNotEmpty()
+        }.sortedByDescending { it.songs.mapNotNull { s -> s.rating }.average() }.take(5)
+    }
+
+    val recommendation = remember(albums) {
+        albums.filter { album -> album.songs.all { it.rating == null } }
+            .sortedByDescending { it.album.id }
+            .take(5)
     }
 
     Scaffold(
         topBar = {
             if (showTopBar) {
-                TopAppBar(
-                    title = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.Audiotrack, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(title, style = MaterialTheme.typography.titleMedium)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                    actions = {
+                Surface(
+                    color = Color.Transparent,
+                    modifier = Modifier.fillMaxWidth().statusBarsPadding()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(title, style = MaterialTheme.typography.titleMedium)
                         if (showActions) {
                             IconButton(onClick = onSettingsClick) {
                                 Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings))
                             }
                         }
                     }
-                )
+                }
             }
         }
     ) { padding ->
@@ -93,40 +131,212 @@ fun HomeScreen(
             Box(modifier = Modifier.fillMaxSize().padding(padding)) {
                 ShimmerLoadingList()
             }
-        } else if (albums.isEmpty()) {
+        } else if (albums.isEmpty() && recommendations.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Text(stringResource(R.string.no_albums))
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-                itemsIndexed(albums) { index, item ->
-                    val delay = index * 80
-                    AnimatedVisibility(
-                        visible = animationsStarted,
-                        enter = slideInVertically(initialOffsetY = { it / 2 }, animationSpec = tween(durationMillis = 400, delayMillis = delay, easing = FastOutSlowInEasing))
-                                + fadeIn(animationSpec = tween(durationMillis = 400, delayMillis = delay))
-                    ) {
-                        AlbumCard(item = item, showActions = showActions, onAlbumClick = onAlbumClick, onDeleteClick = { albumToDelete = item.album }, onEditClick = { onAlbumClick(item.album.id) })
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentPadding = PaddingValues(bottom = 80.dp)
+            ) {
+                if (isDashboard) {
+                    if (recommendation.isNotEmpty()) {
+                        item {
+                            SectionHeader("Новые альбомы")
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(recommendation) { item ->
+                                    DashboardAlbumCard(item, onAlbumClick, { albumToDelete = it.album }, sharedTransitionScope, animatedContentScope)
+                                }
+                            }
+                        }
+                    }
+
+                    if (inProgress.isNotEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            SectionHeader("В процессе")
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(inProgress) { item ->
+                                    DashboardAlbumCard(item, onAlbumClick, { albumToDelete = it.album }, sharedTransitionScope, animatedContentScope)
+                                }
+                            }
+                        }
+                    }
+
+                    if (topOfTheMonth.isNotEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            SectionHeader("Топ месяца")
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(topOfTheMonth) { item ->
+                                    DashboardAlbumCard(item, onAlbumClick, { albumToDelete = it.album }, sharedTransitionScope, animatedContentScope)
+                                }
+                            }
+                        }
+                    }
+
+                    if (recommendations.isNotEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            SectionHeader("Рекомендации для вас")
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(recommendations) { item ->
+                                    RecommendationCard(item, onRecommendationClick)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    items(albums) { item ->
+                        AlbumCard(
+                            item = item,
+                            showActions = showActions,
+                            onAlbumClick = onAlbumClick,
+                            onDeleteClick = { albumToDelete = item.album },
+                            onEditClick = { onAlbumClick(item.album.id) },
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedContentScope = animatedContentScope
+                        )
                     }
                 }
+
+                item { Spacer(modifier = Modifier.height(24.dp)) }
             }
         }
     }
 }
 
 @Composable
+fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+    )
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalFoundationApi::class)
+@Composable
+fun DashboardAlbumCard(
+    item: AlbumWithArtistAndSongs,
+    onClick: (Long) -> Unit,
+    onLongClick: (AlbumWithArtistAndSongs) -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedContentScope: AnimatedContentScope
+) {
+    val avgRating = item.songs.mapNotNull { it.rating }.takeIf { it.isNotEmpty() }?.average()?.let { String.format("%.1f", it) } ?: "—"
+    
+    Column(
+        modifier = Modifier
+            .width(140.dp)
+            .combinedClickable(
+                onClick = { onClick(item.album.id) },
+                onLongClick = { onLongClick(item) }
+            )
+    ) {
+        with(sharedTransitionScope) {
+            if (!item.album.coverUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = item.album.coverUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(140.dp)
+                        .clip(MaterialTheme.shapes.medium)
+                        .sharedElement(
+                            rememberSharedContentState(key = "album-cover-${item.album.id}"),
+                            animatedVisibilityScope = animatedContentScope
+                        ),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(140.dp)
+                        .clip(MaterialTheme.shapes.medium)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .sharedElement(
+                            rememberSharedContentState(key = "album-cover-${item.album.id}"),
+                            animatedVisibilityScope = animatedContentScope
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.Album, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(item.album.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(item.artist.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("⭐ $avgRating", style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+fun RecommendationCard(item: LastFmAlbumSummary, onClick: (LastFmAlbumSummary) -> Unit) {
+    Column(
+        modifier = Modifier
+            .width(140.dp)
+            .clickable { onClick(item) }
+    ) {
+        val imageUrl = item.image?.lastOrNull()?.url
+        if (!imageUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = null,
+                modifier = Modifier.size(140.dp).clip(MaterialTheme.shapes.medium),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                modifier = Modifier.size(140.dp).clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Filled.Album, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(item.name ?: "?", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(item.artist ?: "?", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalFoundationApi::class)
+@Composable
 fun AlbumCard(
     item: AlbumWithArtistAndSongs,
     showActions: Boolean,
     onAlbumClick: (Long) -> Unit,
     onDeleteClick: () -> Unit,
-    onEditClick: () -> Unit
+    onEditClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedContentScope: AnimatedContentScope
 ) {
     val ratedCount = item.songs.count { it.rating != null }
     val totalCount = item.songs.size
     val avgRating = item.songs.mapNotNull { it.rating }.takeIf { it.isNotEmpty() }?.average()?.let { String.format("%.1f", it) } ?: "—"
 
-    val statusText = if (ratedCount == totalCount && totalCount > 0) {
+    val isFullyRated = ratedCount == totalCount && totalCount > 0
+    val backgroundColor = if (isFullyRated) {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+    }
+
+    val statusText = if (isFullyRated) {
         stringResource(R.string.rated_all, totalCount)
     } else {
         stringResource(R.string.rated_count, ratedCount, totalCount)
@@ -134,17 +344,36 @@ fun AlbumCard(
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
-            .combinedClickable(onClick = { onAlbumClick(item.album.id) }, onLongClick = { if (showActions) onDeleteClick() }),
+            .combinedClickable(onClick = { onAlbumClick(item.album.id) }, onLongClick = { onDeleteClick() }),
         shape = MaterialTheme.shapes.large,
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+        colors = CardDefaults.cardColors(containerColor = backgroundColor)
     ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (!item.album.coverUrl.isNullOrBlank()) {
-                AsyncImage(model = item.album.coverUrl, contentDescription = null, modifier = Modifier.size(56.dp))
-            } else {
-                Box(modifier = Modifier.size(56.dp), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Album, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+            with(sharedTransitionScope) {
+                if (!item.album.coverUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = item.album.coverUrl,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(56.dp)
+                            .sharedElement(
+                                rememberSharedContentState(key = "album-cover-${item.album.id}"),
+                                animatedVisibilityScope = animatedContentScope
+                            )
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .sharedElement(
+                                rememberSharedContentState(key = "album-cover-${item.album.id}"),
+                                animatedVisibilityScope = animatedContentScope
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Filled.Album, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
                 }
             }
             Spacer(modifier = Modifier.width(12.dp))
