@@ -37,7 +37,7 @@ fun AddAlbumScreen(
     var history by remember { mutableStateOf(SearchHistory.getHistory(context)) }
 
     val lastFmApi = ApiClient.lastFmApi
-    val deezerApi = ApiClient.deezerApi
+    val iTunesApi = ApiClient.iTunesApi
     val scope = rememberCoroutineScope()
 
     fun doSearch(q: String) {
@@ -150,8 +150,9 @@ fun AddAlbumScreen(
                                             val previews = mutableMapOf<String, String>()
                                             tracks.forEach { track ->
                                                 try {
-                                                    val deezerResponse = deezerApi.searchTrack("${album.artist} $track")
-                                                    val previewUrl = deezerResponse.data?.firstOrNull()?.preview
+                                                    val searchTerm = "${album.artist} $track"
+                                                    val response = iTunesApi.searchTrack(searchTerm)
+                                                    val previewUrl = response.results.firstOrNull()?.previewUrl
                                                     if (previewUrl != null) previews[track] = previewUrl
                                                 } catch (_: Exception) {}
                                             }

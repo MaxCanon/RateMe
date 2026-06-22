@@ -9,8 +9,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.rateme.R
 import com.example.rateme.data.network.*
 import com.example.rateme.data.ApiKey
 import com.example.rateme.data.SearchHistory
@@ -65,22 +67,22 @@ fun SearchScreen(
                 val response = lastFmApi.searchAlbum(q, ApiKey.LAST_FM_API_KEY)
                 Log.d("SearchScreen", "Ответ: ${response.results?.albumMatches?.album?.size} альбомов")
                 results = response.results?.albumMatches?.album ?: emptyList()
-                if (results.isEmpty()) errorMessage = "Ничего не найдено"
+                if (results.isEmpty()) errorMessage = context.getString(R.string.nothing_found)
                 else {
                     SearchHistory.addToHistory(context, q)
                     history = SearchHistory.getHistory(context)
                 }
             } catch (e: UnknownHostException) {
                 Log.e("SearchScreen", "Нет интернета", e)
-                errorMessage = "Нет интернета. Проверьте подключение."
+                errorMessage = context.getString(R.string.no_internet)
                 results = emptyList()
             } catch (e: SocketTimeoutException) {
                 Log.e("SearchScreen", "Таймаут", e)
-                errorMessage = "Сервер не отвечает. Попробуйте позже."
+                errorMessage = context.getString(R.string.server_error)
                 results = emptyList()
             } catch (e: Exception) {
                 Log.e("SearchScreen", "Ошибка: ${e.message}", e)
-                errorMessage = "Ошибка сети: ${e.message}"
+                errorMessage = "${context.getString(R.string.network_error)}: ${e.message}"
                 results = emptyList()
             }
             isLoading = false
@@ -90,9 +92,9 @@ fun SearchScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Поиск альбома") },
+                title = { Text(stringResource(R.string.search)) },
                 navigationIcon = {
-                    TextButton(onClick = onBack) { Text("Назад") }
+                    TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
                 }
             )
         }
@@ -108,14 +110,14 @@ fun SearchScreen(
                         isSearching = false
                     }
                 },
-                label = { Text("Название альбома или исполнитель") },
+                label = { Text(stringResource(R.string.search_hint)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
 
             if (!isSearching && query.isBlank() && history.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("История поиска:", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.search_history), style = MaterialTheme.typography.labelMedium)
                 Spacer(modifier = Modifier.height(4.dp))
                 history.take(5).forEach { item ->
                     TextButton(onClick = {
@@ -130,7 +132,7 @@ fun SearchScreen(
                     history = emptyList()
                 }) {
                     Text(
-                        "Очистить историю",
+                        stringResource(R.string.clear_history),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error
                     )
@@ -147,7 +149,7 @@ fun SearchScreen(
                 Text(errorMessage!!, color = MaterialTheme.colorScheme.error)
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedButton(onClick = { doSearch(query) }) {
-                    Text("Повторить")
+                    Text(stringResource(R.string.retry))
                 }
             }
 

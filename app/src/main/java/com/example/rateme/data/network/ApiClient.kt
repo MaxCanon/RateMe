@@ -19,4 +19,12 @@ object ApiClient {
             .build()
             .create(DeezerApi::class.java)
     }
+
+    val iTunesApi: ITunesApi by lazy {
+        Retrofit.Builder()
+            .baseUrl("https://itunes.apple.com/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(ITunesApi::class.java)
+    }
 }

@@ -1,7 +1,6 @@
 package com.example.rateme.ui.screens
 
 import android.content.Intent
-import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,7 +9,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -33,10 +31,13 @@ fun AlbumScreen(
     onShareClick: (Intent) -> Unit,
     readOnly: Boolean = false
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     if (albumWithSongs == null) {
         Box(modifier = Modifier.fillMaxSize()) { CircularProgressIndicator() }
         return
     }
+
+    var playingSongId by remember { mutableStateOf<Long?>(null) }
 
     Scaffold(
         topBar = {
@@ -52,10 +53,10 @@ fun AlbumScreen(
                                 appendLine("${i + 1}. ${s.title} — $r/10")
                             }
                             val avg = albumWithSongs.songs.mapNotNull { it.rating }.average().let {
-                                if (it.isNaN()) "—" else String.format("%.1f", it)
+                                if (it.isNaN()) "—" else String.format(java.util.Locale.getDefault(), "%.1f", it)
                             }
                             appendLine()
-                            appendLine("Средний балл: $avg/10")
+                            appendLine(context.getString(R.string.avg_rating_value, avg))
                         }
                         onShareClick(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, shareText) })
                     }) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.share)) }
@@ -74,11 +75,21 @@ fun AlbumScreen(
                         Text(stringResource(R.string.readonly_warning), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("Треков: ${albumWithSongs.songs.size}", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.tracks_count, albumWithSongs.songs.size), style = MaterialTheme.typography.bodySmall)
                 }
             }
             itemsIndexed(albumWithSongs.songs) { index, song ->
-                SongRow(song = song, trackNumber = index + 1, onRatingChanged = { rating -> onRatingChanged(song.id, rating) }, readOnly = readOnly)
+                SongRow(
+                    song = song, 
+                    trackNumber = index + 1, 
+                    onRatingChanged = { rating: Int -> onRatingChanged(song.id, rating) }, 
+                    readOnly = readOnly,
+                    isPlaying = playingSongId == song.id,
+                    onTogglePlay = { 
+                        if (playingSongId == song.id) playingSongId = null
+                        else playingSongId = song.id
+                    }
+                )
             }
             item { Spacer(modifier = Modifier.height(16.dp)) }
         }
@@ -97,14 +108,60 @@ fun MarqueeText(text: String, modifier: Modifier = Modifier) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SongRow(song: Song, trackNumber: Int, onRatingChanged: (Int) -> Unit, readOnly: Boolean = false) {
+fun SongRow(
+    song: Song, 
+    trackNumber: Int, 
+    onRatingChanged: (Int) -> Unit, 
+    readOnly: Boolean = false,
+    isPlaying: Boolean,
+    onTogglePlay: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var sliderValue by remember { mutableFloatStateOf(song.rating?.toFloat() ?: 0f) }
-    var isPlaying by remember { mutableStateOf(false) }
     var mediaPlayer by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
 
-    DisposableEffect(Unit) { onDispose { mediaPlayer?.stop(); mediaPlayer?.release(); mediaPlayer = null } }
+    fun releasePlayer() {
+        mediaPlayer?.let {
+            try {
+                if (it.isPlaying) it.stop()
+            } catch (_: Exception) {}
+            it.release()
+        }
+        mediaPlayer = null
+    }
 
-    fun stopPreview() { mediaPlayer?.stop(); mediaPlayer?.release(); mediaPlayer = null; isPlaying = false }
+    LaunchedEffect(isPlaying) {
+        if (!isPlaying) {
+            releasePlayer()
+        } else if (mediaPlayer == null) {
+            try {
+                var url = song.previewUrl ?: ""
+                if (url.startsWith("http://")) url = url.replace("http://", "https://")
+                
+                val mp = android.media.MediaPlayer().apply {
+                    setDataSource(url)
+                    setAudioAttributes(
+                        android.media.AudioAttributes.Builder()
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                            .build()
+                    )
+                    setOnPreparedListener { it.start() }
+                    setOnCompletionListener { onTogglePlay() }
+                    setOnErrorListener { _, _, _ -> onTogglePlay(); true }
+                    prepareAsync()
+                }
+                mediaPlayer = mp
+            } catch (e: Exception) {
+                android.util.Log.e("MediaPlayer", "Error: ${e.message}")
+                onTogglePlay()
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { releasePlayer() }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -116,10 +173,12 @@ fun SongRow(song: Song, trackNumber: Int, onRatingChanged: (Int) -> Unit, readOn
             Text("$trackNumber. ${song.title}", maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (!song.previewUrl.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
-                Button(onClick = {
-                    if (isPlaying) stopPreview()
-                    else try { stopPreview(); mediaPlayer = android.media.MediaPlayer().apply { setDataSource(song.previewUrl); setOnPreparedListener { start() }; setOnCompletionListener { stopPreview() }; prepareAsync() }; isPlaying = true } catch (_: Exception) {}
-                }, modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp), enabled = !readOnly || isPlaying) {
+                Button(
+                    onClick = { onTogglePlay() },
+                    modifier = Modifier.height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    enabled = !readOnly || isPlaying
+                ) {
                     Text(if (isPlaying) stringResource(R.string.stop) else stringResource(R.string.listen_30s), style = MaterialTheme.typography.labelSmall)
                 }
             }
@@ -130,7 +189,7 @@ fun SongRow(song: Song, trackNumber: Int, onRatingChanged: (Int) -> Unit, readOn
                 for (i in 0..10) Text("$i", style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
             }
             Spacer(modifier = Modifier.height(4.dp))
-            Text("Оценка: ${sliderValue.roundToInt()}/10", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
+            Text(stringResource(R.string.rating_value, sliderValue.roundToInt()), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
         }
     }
 }

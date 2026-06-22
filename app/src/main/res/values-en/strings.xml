@@ -44,4 +44,16 @@
     <string name="light_theme">Light</string>
     <string name="error_cant_rate">Cannot rate tracks here</string>
     <string name="language_ru">Russian</string>
+    <string name="language_en">English</string>
+    <string name="language_de">German</string>
+    <string name="language_fr">French</string>
+    <string name="achievements">Achievements</string>
+    <string name="achievement_unlocked">🏆 %s unlocked!</string>
+    <string name="tracks_count">Tracks: %d</string>
+    <string name="rating_value">Rating: %d/10</string>
+    <string name="avg_rating_value">Average score: %s/10</string>
+    <string name="search_history">Search history:</string>
+    <string name="clear_history">Clear history</string>
+    <string name="no_internet">No internet. Check your connection.</string>
+    <string name="server_error">Server is not responding. Try again later.</string>
 </resources>

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,7 +43,7 @@ class MainActivity : ComponentActivity() {
 
         val prefs = getSharedPreferences("settings", MODE_PRIVATE)
         val lang = prefs.getString("language", "ru") ?: "ru"
-        val locale = if (lang == "en") java.util.Locale("en") else java.util.Locale("ru")
+        val locale = java.util.Locale(lang)
         java.util.Locale.setDefault(locale)
         val config = resources.configuration
         config.setLocale(locale)
@@ -58,15 +59,12 @@ class MainActivity : ComponentActivity() {
             val context = LocalContext.current
             RateMeTheme(darkTheme = isDarkTheme) {
                 AppBackground(isDarkTheme = isDarkTheme) {
-                    RateMeApp(
-                        isDarkTheme = isDarkTheme,
-                        onThemeToggle = {
-                            val newValue = !isDarkTheme
-                            isDarkTheme = newValue
-                            context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
-                                .edit().putBoolean("darkTheme", newValue).apply()
-                        }
-                    )
+                    RateMeApp(isDarkTheme = isDarkTheme, onThemeToggle = {
+                        val newValue = !isDarkTheme
+                        isDarkTheme = newValue
+                        context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+                            .edit().putBoolean("darkTheme", newValue).apply()
+                    })
                 }
             }
         }
@@ -77,21 +75,31 @@ class MainActivity : ComponentActivity() {
 fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
     val navController = rememberNavController()
     val viewModel: MainViewModel = viewModel()
-    val context = LocalContext.current
+    val appContext = LocalContext.current
 
     var albums by remember { mutableStateOf<List<AlbumWithArtistAndSongs>>(emptyList()) }
     var ratedAlbums by remember { mutableStateOf<List<AlbumWithArtistAndSongs>>(emptyList()) }
     var albumsByRating by remember { mutableStateOf<List<AlbumWithAvgRating>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(Unit) {
-        viewModel.allAlbums.collect {
-            albums = it
-            isLoading = false
+    val newAchievement by viewModel.newAchievement.observeAsState(initial = null)
+
+    LaunchedEffect(newAchievement) {
+        newAchievement?.let { ach ->
+            android.widget.Toast.makeText(appContext, appContext.getString(R.string.achievement_unlocked, ach.title), android.widget.Toast.LENGTH_LONG).show()
+            viewModel.clearAchievement()
         }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.allAlbums.collect { albums = it; isLoading = false }
     }
     LaunchedEffect(Unit) { viewModel.ratedAlbums.collect { ratedAlbums = it } }
     LaunchedEffect(Unit) { viewModel.albumsByRating.collect { albumsByRating = it } }
+
+    LaunchedEffect(Unit) {
+        viewModel.incrementAchievement(appContext, "14")
+    }
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -100,202 +108,108 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
         if (currentRoute != "home") {
             navController.navigate("home") {
                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                launchSingleTop = true
-                restoreState = true
+                launchSingleTop = true; restoreState = true
             }
         } else {
-            (context as? android.app.Activity)?.moveTaskToBack(true)
+            (appContext as? android.app.Activity)?.moveTaskToBack(true)
         }
     }
 
-    val showBottomBar = currentRoute in listOf("home", "rated", "rating", "add", "stats", "settings")
+    val showBottomBar = currentRoute in listOf("home", "rated", "rating", "add", "stats", "settings", "oldstats")
 
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth()
                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
-                        .navigationBarsPadding()
-                        .padding(vertical = 8.dp),
+                        .navigationBarsPadding().padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                        IconButton(onClick = {
-                            navController.navigate("home") {
-                                popUpTo("home") { inclusive = true }
-                                launchSingleTop = true
-                            }
-                        }) {
-                            Icon(Icons.Filled.Home, contentDescription = null,
-                                tint = if (currentRoute == "home") MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        IconButton(onClick = { navController.navigate("home") { popUpTo("home") { inclusive = true }; launchSingleTop = true } }) {
+                            Icon(Icons.Filled.Home, contentDescription = null, tint = if (currentRoute == "home") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         }
-                        Text(stringResource(R.string.home), style = MaterialTheme.typography.labelSmall,
-                            color = if (currentRoute == "home") MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        Text(stringResource(R.string.home), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "home") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                        IconButton(onClick = {
-                            navController.navigate("rated") {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true; restoreState = true
-                            }
-                        }) {
-                            Icon(Icons.Filled.ThumbUp, contentDescription = null,
-                                tint = if (currentRoute == "rated") MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        IconButton(onClick = { navController.navigate("rated") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }) {
+                            Icon(Icons.Filled.ThumbUp, contentDescription = null, tint = if (currentRoute == "rated") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         }
-                        Text(stringResource(R.string.ratings), style = MaterialTheme.typography.labelSmall,
-                            color = if (currentRoute == "rated") MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        Text(stringResource(R.string.ratings), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "rated") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                        FloatingActionButton(onClick = {
-                            navController.navigate("add") {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true; restoreState = true
-                            }
-                        }, modifier = Modifier.size(48.dp).shadow(8.dp, CircleShape),
-                            containerColor = MaterialTheme.colorScheme.primary, shape = CircleShape) {
+                        FloatingActionButton(onClick = { navController.navigate("add") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } },
+                            modifier = Modifier.size(48.dp).shadow(8.dp, CircleShape), containerColor = MaterialTheme.colorScheme.primary, shape = CircleShape) {
                             Icon(Icons.Filled.Add, contentDescription = "Добавить", tint = MaterialTheme.colorScheme.onPrimary)
                         }
                         Text(stringResource(R.string.add), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                        IconButton(onClick = {
-                            navController.navigate("rating") {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true; restoreState = true
-                            }
-                        }) {
-                            Icon(Icons.Filled.Favorite, contentDescription = null,
-                                tint = if (currentRoute == "rating") MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        IconButton(onClick = { navController.navigate("rating") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }) {
+                            Icon(Icons.Filled.Favorite, contentDescription = null, tint = if (currentRoute == "rating") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         }
-                        Text(stringResource(R.string.rating), style = MaterialTheme.typography.labelSmall,
-                            color = if (currentRoute == "rating") MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        Text(stringResource(R.string.rating), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "rating") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                        IconButton(onClick = {
-                            navController.navigate("stats") {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true; restoreState = true
-                            }
-                        }) {
-                            Icon(Icons.Filled.EmojiEvents, contentDescription = null,
-                                tint = if (currentRoute == "stats") MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        IconButton(onClick = { navController.navigate("stats") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }) {
+                            Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = if (currentRoute == "stats") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         }
-                        Text(stringResource(R.string.stats), style = MaterialTheme.typography.labelSmall,
-                            color = if (currentRoute == "stats") MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        Text(stringResource(R.string.achievements), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "stats") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     }
                 }
             }
         }
     ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = "home",
-            modifier = Modifier.padding(innerPadding)
-        ) {
+        NavHost(navController = navController, startDestination = "home", modifier = Modifier.padding(innerPadding)) {
             composable("home") {
-                HomeScreen(
-                    albums = albums,
-                    onAlbumClick = { navController.navigate("album/$it") },
-                    onAddClick = {},
-                    onDeleteClick = { viewModel.deleteAlbum(it) },
-                    isDarkTheme = isDarkTheme,
-                    onThemeToggle = {},
-                    onRatedClick = {},
-                    onRatingClick = {},
-                    showActions = true,
-                    showTopBar = true,
-                    showAddButton = false,
-                    isLoading = isLoading,
-                    onSettingsClick = { navController.navigate("settings") }
-                )
+                HomeScreen(albums = albums, onAlbumClick = { navController.navigate("album/$it") }, onAddClick = {}, onDeleteClick = { viewModel.deleteAlbum(it) },
+                    isDarkTheme = isDarkTheme, onThemeToggle = {}, onRatedClick = {}, onRatingClick = {},
+                    showActions = true, showTopBar = true, showAddButton = false, isLoading = isLoading,
+                    onSettingsClick = { navController.navigate("settings") })
             }
             composable("rated") {
-                HomeScreen(
-                    albums = ratedAlbums,
-                    onAlbumClick = { navController.navigate("album/$it") },
-                    onAddClick = {},
-                    onDeleteClick = {},
-                    isDarkTheme = isDarkTheme,
-                    onThemeToggle = {},
-                    onRatedClick = {},
-                    onRatingClick = {},
-                    showActions = false,
-                    showTopBar = true,
-                    showAddButton = false,
-                    title = stringResource(R.string.evaluated_albums),
-                    isLoading = false
-                )
+                HomeScreen(albums = ratedAlbums, onAlbumClick = { navController.navigate("album/$it") }, onAddClick = {}, onDeleteClick = {},
+                    isDarkTheme = isDarkTheme, onThemeToggle = {}, onRatedClick = {}, onRatingClick = {},
+                    showActions = false, showTopBar = true, showAddButton = false, title = stringResource(R.string.evaluated_albums), isLoading = false)
             }
             composable("rating") {
-                RatingScreen(
-                    albums = albumsByRating,
-                    onBack = { navController.navigate("home") },
-                    onAlbumClick = { navController.navigate("album_view/$it") }
-                )
+                RatingScreen(albums = albumsByRating, onBack = { navController.navigate("home") }, onAlbumClick = { navController.navigate("album_view/$it") })
             }
             composable("album/{albumId}") { backStackEntry ->
                 val id = backStackEntry.arguments?.getString("albumId")?.toLongOrNull()
-                val album = albums.find { it.album.id == id }
-                AlbumScreen(
-                    albumWithSongs = album,
-                    onBack = { navController.navigate("home") },
-                    onRatingChanged = { songId, rating -> viewModel.updateRating(songId, rating) },
-                    onShareClick = { intent ->
-                        navController.context.startActivity(Intent.createChooser(intent, "Поделиться"))
-                    },
-                    readOnly = false
-                )
+                AlbumScreen(albumWithSongs = albums.find { it.album.id == id }, onBack = { navController.navigate("home") },
+                    onRatingChanged = { songId, rating -> viewModel.updateRating(songId, rating, appContext, isDarkTheme) },
+                    onShareClick = { navController.context.startActivity(Intent.createChooser(it, "Поделиться")) }, readOnly = false)
             }
             composable("album_view/{albumId}") { backStackEntry ->
                 val id = backStackEntry.arguments?.getString("albumId")?.toLongOrNull()
-                val album = albums.find { it.album.id == id }
-                AlbumScreen(
-                    albumWithSongs = album,
-                    onBack = { navController.navigate("rating") },
+                AlbumScreen(albumWithSongs = albums.find { it.album.id == id }, onBack = { navController.navigate("rating") },
                     onRatingChanged = { _, _ -> },
-                    onShareClick = { intent ->
-                        navController.context.startActivity(Intent.createChooser(intent, "Поделиться"))
-                    },
-                    readOnly = true
-                )
+                    onShareClick = { navController.context.startActivity(Intent.createChooser(it, "Поделиться")) }, readOnly = true)
             }
             composable("add") {
-                AddAlbumScreen(
-                    onAlbumSelected = { artist, album, coverUrl, tracks, previews, year ->
-                        viewModel.addAlbumWithSongs(
-                            artist, album, tracks, coverUrl, previews, year,
-                            onDuplicate = {
-                                android.widget.Toast.makeText(context, context.getString(R.string.duplicate_album), android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        )
-                        navController.navigate("home")
-                    },
-                    onBack = { navController.navigate("home") }
-                )
+                AddAlbumScreen(onAlbumSelected = { artist, album, coverUrl, tracks, previews, year ->
+                    viewModel.addAlbumWithSongs(artist, album, tracks, coverUrl, previews, year,
+                        onDuplicate = { android.widget.Toast.makeText(appContext, appContext.getString(R.string.duplicate_album), android.widget.Toast.LENGTH_SHORT).show() })
+                    navController.navigate("home")
+                }, onBack = { navController.navigate("home") })
             }
             composable("stats") {
-                StatsScreen(
-                    albums = albums,
-                    onBack = { navController.navigate("home") }
-                )
+                AchievementsScreen(onBack = { navController.navigate("home") })
             }
             composable("settings") {
-                SettingsScreen(
-                    isDarkTheme = isDarkTheme,
-                    onThemeToggle = onThemeToggle,
-                    onBack = { navController.navigate("home") }
-                )
+                SettingsScreen(isDarkTheme = isDarkTheme, onThemeToggle = onThemeToggle,
+                    onBack = { navController.navigate("home") }, onStatsClick = { 
+                        viewModel.incrementAchievement(appContext, "19")
+                        navController.navigate("oldstats") 
+                    }, onLanguageChange = {
+                        viewModel.incrementAchievement(appContext, "7")
+                    })
+            }
+            composable("oldstats") {
+                StatsScreen(albums = albums, onBack = { navController.navigate("settings") })
             }
         }
     }

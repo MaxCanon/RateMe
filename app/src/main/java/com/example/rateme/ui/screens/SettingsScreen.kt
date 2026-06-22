@@ -19,15 +19,22 @@ import com.example.rateme.R
 fun SettingsScreen(
     isDarkTheme: Boolean,
     onThemeToggle: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onStatsClick: () -> Unit = {},
+    onLanguageChange: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
     val savedLang = prefs.getString("language", "ru") ?: "ru"
 
     var expandedLanguage by remember { mutableStateOf(false) }
-    var selectedLanguage by remember { mutableStateOf(if (savedLang == "en") "English" else "Русский") }
-    val languages = listOf("Русский", "English")
+    val languageMap = mapOf(
+        "ru" to stringResource(R.string.language_ru),
+        "en" to stringResource(R.string.language_en),
+        "de" to stringResource(R.string.language_de),
+        "fr" to stringResource(R.string.language_fr)
+    )
+    var selectedLanguage by remember { mutableStateOf(languageMap[savedLang] ?: "Русский") }
 
     Scaffold(
         topBar = {
@@ -45,31 +52,32 @@ fun SettingsScreen(
                     subtitle = selectedLanguage,
                     onClick = { expandedLanguage = true }
                 )
-                DropdownMenu(
-                    expanded = expandedLanguage,
-                    onDismissRequest = { expandedLanguage = false }
-                ) {
-                    languages.forEach { lang ->
-                        DropdownMenuItem(
-                            text = { Text(lang) },
-                            onClick = {
-                                selectedLanguage = lang
-                                expandedLanguage = false
-
-                                prefs.edit()
-                                    .putString("language", if (lang == "English") "en" else "ru")
-                                    .putBoolean("darkTheme", isDarkTheme)
-                                    .apply()
-
-                                // Простой перезапуск
-                                val intent = android.content.Intent(context, context::class.java)
-                                context.startActivity(intent)
-                                (context as android.app.Activity).finish()
+                DropdownMenu(expanded = expandedLanguage, onDismissRequest = { expandedLanguage = false }) {
+                    languageMap.forEach { (code, label) ->
+                        DropdownMenuItem(text = { Text(label) }, onClick = {
+                            if (code != savedLang) {
+                                onLanguageChange()
                             }
-                        )
+
+                            expandedLanguage = false
+                            prefs.edit()
+                                .putString("language", code)
+                                .putBoolean("darkTheme", isDarkTheme)
+                                .apply()
+                            val intent = android.content.Intent(context, context::class.java)
+                            context.startActivity(intent)
+                            (context as android.app.Activity).finish()
+                        })
                     }
                 }
             }
+
+            SettingsItem(
+                icon = Icons.Filled.BarChart,
+                title = "Статистика",
+                subtitle = "Альбомы, треки, рейтинг",
+                onClick = onStatsClick
+            )
 
             SettingsItem(
                 icon = Icons.Filled.Info,
@@ -96,17 +104,9 @@ fun SettingsScreen(
 }
 
 @Composable
-fun SettingsItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
+fun SettingsItem(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 14.dp)
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 14.dp)
     ) {
         Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.width(16.dp))

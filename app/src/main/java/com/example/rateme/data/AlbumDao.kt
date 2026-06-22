@@ -48,27 +48,6 @@ interface AlbumDao {
     """)
     fun getAlbumsByRating(): Flow<List<AlbumWithAvgRating>>
 
-    @Query("""
-        SELECT ar.* 
-        FROM artists ar
-        WHERE ar.id IN (
-            SELECT DISTINCT al.artistId 
-            FROM albums al 
-            INNER JOIN songs s ON s.albumId = al.id 
-            WHERE s.rating IS NOT NULL
-        )
-        ORDER BY ar.name
-    """)
-    fun getRatedArtists(): Flow<List<Artist>>
-
-    @Transaction
-    @Query("""
-        SELECT * FROM albums 
-        WHERE artistId = :artistId 
-        AND id IN (SELECT DISTINCT albumId FROM songs WHERE rating IS NOT NULL)
-    """)
-    fun getRatedAlbumsByArtist(artistId: Long): Flow<List<AlbumWithArtistAndSongs>>
-
     @Transaction
     @Query("""
         SELECT * FROM albums 

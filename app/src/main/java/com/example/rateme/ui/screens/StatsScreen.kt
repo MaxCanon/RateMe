@@ -27,7 +27,6 @@ fun StatsScreen(
         ?.average()
         ?.let { String.format("%.1f", it) }
         ?: "—"
-
     val topArtist = albums
         .flatMap { album -> album.songs.map { album.artist.name to it.rating } }
         .filter { it.second != null }
@@ -50,7 +49,7 @@ fun StatsScreen(
         ) {
             item { StatCard(stringResource(R.string.total_albums), "$totalAlbums") }
             item { StatCard(stringResource(R.string.total_songs), "$totalSongs") }
-            item { StatCard(stringResource(R.string.rated_songs), "$totalRated из $totalSongs") }
+            item { StatCard(stringResource(R.string.rated_songs), stringResource(R.string.rated_count, totalRated, totalSongs)) }
             item { StatCard(stringResource(R.string.avg_rating), "$averageRating / 10") }
             item { StatCard(stringResource(R.string.top_artist), topArtist) }
         }

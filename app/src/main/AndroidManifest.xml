@@ -13,6 +13,7 @@
         android:label="RateMe"
         android:supportsRtl="true"
         android:theme="@style/Theme.RateMe"
+        android:usesCleartextTraffic="true"
         tools:targetApi="35">
         <activity
             android:name=".MainActivity"

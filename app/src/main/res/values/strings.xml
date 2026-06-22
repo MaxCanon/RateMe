@@ -44,4 +44,16 @@
     <string name="light_theme">Светлая</string>
     <string name="error_cant_rate">Здесь оценивать треки нельзя</string>
     <string name="language_ru">Русский</string>
+    <string name="language_en">English</string>
+    <string name="language_de">Deutsch</string>
+    <string name="language_fr">Français</string>
+    <string name="achievements">Достижения</string>
+    <string name="achievement_unlocked">🏆 %s разблокировано!</string>
+    <string name="tracks_count">Треков: %d</string>
+    <string name="rating_value">Оценка: %d/10</string>
+    <string name="avg_rating_value">Средний балл: %s/10</string>
+    <string name="search_history">История поиска:</string>
+    <string name="clear_history">Очистить историю</string>
+    <string name="no_internet">Нет интернета. Проверьте подключение.</string>
+    <string name="server_error">Сервер не отвечает. Попробуйте позже.</string>
 </resources>
