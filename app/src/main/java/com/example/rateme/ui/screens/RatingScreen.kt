@@ -4,12 +4,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.rateme.R
 import com.example.rateme.data.AlbumWithAvgRating
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -22,10 +26,8 @@ fun RatingScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Рейтинг альбомов", style = MaterialTheme.typography.titleMedium) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                )
+                title = { Text(stringResource(R.string.rating_title), style = MaterialTheme.typography.titleMedium) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         }
     ) { padding ->
@@ -34,7 +36,7 @@ fun RatingScreen(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentAlignment = androidx.compose.ui.Alignment.Center
             ) {
-                Text("Нет оценённых альбомов")
+                Text(stringResource(R.string.no_rated_albums))
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -43,7 +45,10 @@ fun RatingScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp, vertical = 4.dp)
-                            .clickable { onAlbumClick(album.id) }
+                            .clickable { onAlbumClick(album.id) },
+                        shape = MaterialTheme.shapes.large,
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
                     ) {
                         Row(modifier = Modifier.padding(16.dp)) {
                             Text(

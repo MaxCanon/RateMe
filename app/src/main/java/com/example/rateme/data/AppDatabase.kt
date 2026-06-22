@@ -42,21 +42,15 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         private val MIGRATION_4_5 = object : Migration(4, 5) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                // Без изменений структуры
-            }
+            override fun migrate(db: SupportSQLiteDatabase) {}
         }
 
         private val MIGRATION_5_6 = object : Migration(5, 6) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                // Без изменений структуры
-            }
+            override fun migrate(db: SupportSQLiteDatabase) {}
         }
 
         private val MIGRATION_6_7 = object : Migration(6, 7) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                // Текущая версия
-            }
+            override fun migrate(db: SupportSQLiteDatabase) {}
         }
 
         fun getDatabase(context: Context): AppDatabase {
@@ -67,12 +61,8 @@ abstract class AppDatabase : RoomDatabase() {
                     "rateme_database"
                 )
                     .addMigrations(
-                        MIGRATION_1_2,
-                        MIGRATION_2_3,
-                        MIGRATION_3_4,
-                        MIGRATION_4_5,
-                        MIGRATION_5_6,
-                        MIGRATION_6_7
+                        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
+                        MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7
                     )
                     .build()
                 INSTANCE = instance

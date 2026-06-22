@@ -6,15 +6,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.rateme.R
 import com.example.rateme.data.AlbumWithArtistAndSongs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatsScreen(
     albums: List<AlbumWithArtistAndSongs>,
-    ratedAlbums: List<AlbumWithArtistAndSongs>,
     onBack: () -> Unit
 ) {
     val totalAlbums = albums.size
@@ -26,15 +27,19 @@ fun StatsScreen(
         ?.average()
         ?.let { String.format("%.1f", it) }
         ?: "—"
+
     val topArtist = albums
-        .groupBy { it.artist.name }
-        .maxByOrNull { it.value.size }
+        .flatMap { album -> album.songs.map { album.artist.name to it.rating } }
+        .filter { it.second != null }
+        .groupBy { it.first }
+        .mapValues { entry -> entry.value.mapNotNull { it.second }.average() }
+        .maxByOrNull { it.value }
         ?.key ?: "—"
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Статистика", style = MaterialTheme.typography.titleMedium) },
+                title = { Text(stringResource(R.string.stats), style = MaterialTheme.typography.titleMedium) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         }
@@ -43,11 +48,11 @@ fun StatsScreen(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item { StatCard("🎵 Альбомов", "$totalAlbums") }
-            item { StatCard("🎤 Треков всего", "$totalSongs") }
-            item { StatCard("✅ Оценено треков", "$totalRated из $totalSongs") }
-            item { StatCard("⭐ Средний балл", "$averageRating / 10") }
-            item { StatCard("🏆 Любимый артист", topArtist) }
+            item { StatCard(stringResource(R.string.total_albums), "$totalAlbums") }
+            item { StatCard(stringResource(R.string.total_songs), "$totalSongs") }
+            item { StatCard(stringResource(R.string.rated_songs), "$totalRated из $totalSongs") }
+            item { StatCard(stringResource(R.string.avg_rating), "$averageRating / 10") }
+            item { StatCard(stringResource(R.string.top_artist), topArtist) }
         }
     }
 }

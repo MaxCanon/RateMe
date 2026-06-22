@@ -10,8 +10,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.rateme.R
 import com.example.rateme.data.ApiKey
 import com.example.rateme.data.SearchHistory
 import com.example.rateme.data.network.*
@@ -64,10 +66,8 @@ fun AddAlbumScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Добавить альбом", style = MaterialTheme.typography.titleMedium) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                )
+                title = { Text(stringResource(R.string.search), style = MaterialTheme.typography.titleMedium) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         }
     ) { padding ->
@@ -82,14 +82,14 @@ fun AddAlbumScreen(
                         hasSearched = false
                     }
                 },
-                label = { Text("Название альбома или исполнитель") },
+                label = { Text(stringResource(R.string.search_hint)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
 
             if (!hasSearched && query.isBlank() && history.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("История:", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.history) + ":", style = MaterialTheme.typography.labelMedium)
                 history.take(5).forEach { item ->
                     TextButton(onClick = {
                         query = item
@@ -102,7 +102,7 @@ fun AddAlbumScreen(
                     SearchHistory.clearHistory(context)
                     history = emptyList()
                 }) {
-                    Text("Очистить", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.clear), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                 }
             }
 
@@ -115,7 +115,7 @@ fun AddAlbumScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(errorMessage!!, color = MaterialTheme.colorScheme.error)
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(onClick = { doSearch(query) }) { Text("Повторить") }
+                OutlinedButton(onClick = { doSearch(query) }) { Text(stringResource(R.string.retry)) }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -176,7 +176,10 @@ fun AddAlbumScreen(
                                         }
                                         isLoading = false
                                     }
-                                }
+                                },
+                            shape = MaterialTheme.shapes.large,
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
                         ) {
                             Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 if (!imageUrl.isNullOrBlank()) {

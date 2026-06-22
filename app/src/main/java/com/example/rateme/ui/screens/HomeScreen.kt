@@ -8,22 +8,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.rateme.R
 import com.example.rateme.data.AlbumWithArtistAndSongs
 import com.example.rateme.data.model.Album
 import com.example.rateme.ui.components.ShimmerLoadingList
-import androidx.compose.material.icons.filled.Settings
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -43,30 +41,27 @@ fun HomeScreen(
     showAddButton: Boolean = true,
     title: String = "RateMe",
     isLoading: Boolean = false
-
 ) {
     var albumToDelete by remember { mutableStateOf<Album?>(null) }
     var animationsStarted by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        animationsStarted = true
-    }
+    LaunchedEffect(Unit) { animationsStarted = true }
 
     if (albumToDelete != null && showActions) {
         AlertDialog(
             onDismissRequest = { albumToDelete = null },
-            title = { Text("Удалить альбом?") },
-            text = { Text("Удалить «${albumToDelete!!.title}»?\nВсе оценки будут потеряны.") },
+            title = { Text(stringResource(R.string.delete_album_title)) },
+            text = { Text(stringResource(R.string.delete_album_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     onDeleteClick(albumToDelete!!)
                     albumToDelete = null
                 }) {
-                    Text("Удалить", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.delete_confirm), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { albumToDelete = null }) { Text("Отмена") }
+                TextButton(onClick = { albumToDelete = null }) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
@@ -77,23 +72,16 @@ fun HomeScreen(
                 TopAppBar(
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Filled.Audiotrack,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
+                            Icon(Icons.Filled.Audiotrack, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(title, style = MaterialTheme.typography.titleMedium)
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent
-                    ),
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     actions = {
                         if (showActions) {
                             IconButton(onClick = onSettingsClick) {
-                                Icon(Icons.Filled.Settings, contentDescription = "Настройки")
+                                Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings))
                             }
                         }
                     }
@@ -106,42 +94,19 @@ fun HomeScreen(
                 ShimmerLoadingList()
             }
         } else if (albums.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("Нет альбомов. Нажми + чтобы добавить!")
+            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Text(stringResource(R.string.no_albums))
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
                 itemsIndexed(albums) { index, item ->
                     val delay = index * 80
-
                     AnimatedVisibility(
                         visible = animationsStarted,
-                        enter = slideInVertically(
-                            initialOffsetY = { it / 2 },
-                            animationSpec = tween(
-                                durationMillis = 400,
-                                delayMillis = delay,
-                                easing = FastOutSlowInEasing
-                            )
-                        ) + fadeIn(
-                            animationSpec = tween(
-                                durationMillis = 400,
-                                delayMillis = delay
-                            )
-                        )
+                        enter = slideInVertically(initialOffsetY = { it / 2 }, animationSpec = tween(durationMillis = 400, delayMillis = delay, easing = FastOutSlowInEasing))
+                                + fadeIn(animationSpec = tween(durationMillis = 400, delayMillis = delay))
                     ) {
-                        AlbumCard(
-                            item = item,
-                            showActions = showActions,
-                            onAlbumClick = onAlbumClick,
-                            onDeleteClick = { albumToDelete = item.album },
-                            onEditClick = { onAlbumClick(item.album.id) }
-                        )
+                        AlbumCard(item = item, showActions = showActions, onAlbumClick = onAlbumClick, onDeleteClick = { albumToDelete = item.album }, onEditClick = { onAlbumClick(item.album.id) })
                     }
                 }
             }
@@ -159,95 +124,39 @@ fun AlbumCard(
 ) {
     val ratedCount = item.songs.count { it.rating != null }
     val totalCount = item.songs.size
-    val avgRating = item.songs
-        .mapNotNull { it.rating }
-        .takeIf { it.isNotEmpty() }
-        ?.average()
-        ?.let { String.format("%.1f", it) }
-        ?: "—"
+    val avgRating = item.songs.mapNotNull { it.rating }.takeIf { it.isNotEmpty() }?.average()?.let { String.format("%.1f", it) } ?: "—"
 
     val statusText = if (ratedCount == totalCount && totalCount > 0) {
-        "Оценены все $totalCount треков"
+        stringResource(R.string.rated_all, totalCount)
     } else {
-        "Оценено $ratedCount из $totalCount"
+        stringResource(R.string.rated_count, ratedCount, totalCount)
     }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-            .combinedClickable(
-                onClick = { onAlbumClick(item.album.id) },
-                onLongClick = { if (showActions) onDeleteClick() }
-            ),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
+            .combinedClickable(onClick = { onAlbumClick(item.album.id) }, onLongClick = { if (showActions) onDeleteClick() }),
         shape = MaterialTheme.shapes.large,
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-        )
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (!item.album.coverUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = item.album.coverUrl,
-                    contentDescription = null,
-                    modifier = Modifier.size(56.dp)
-                )
+                AsyncImage(model = item.album.coverUrl, contentDescription = null, modifier = Modifier.size(56.dp))
             } else {
-                Box(
-                    modifier = Modifier.size(56.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Filled.Star,
-                        contentDescription = null,
-                        modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                Box(modifier = Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Album, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
                 }
             }
-
             Spacer(modifier = Modifier.width(12.dp))
-
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    item.album.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    item.artist.name,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    "⭐ $avgRating/10",
-                    style = MaterialTheme.typography.labelSmall
-                )
-                Text(
-                    statusText,
-                    style = MaterialTheme.typography.labelSmall
-                )
+                Text(item.album.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(item.artist.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                Text("⭐ $avgRating/10", style = MaterialTheme.typography.labelSmall)
+                Text(statusText, style = MaterialTheme.typography.labelSmall)
             }
-
             if (showActions) {
-                IconButton(onClick = onEditClick) {
-                    Icon(
-                        Icons.Filled.Edit,
-                        contentDescription = "Оценить",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                IconButton(onClick = onDeleteClick) {
-                    Icon(
-                        Icons.Filled.Delete,
-                        contentDescription = "Удалить",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
+                IconButton(onClick = onEditClick) { Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.edit), tint = MaterialTheme.colorScheme.primary) }
+                IconButton(onClick = onDeleteClick) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.delete_confirm), tint = MaterialTheme.colorScheme.error) }
             }
         }
     }

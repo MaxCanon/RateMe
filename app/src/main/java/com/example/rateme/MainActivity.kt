@@ -10,12 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -24,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -32,25 +28,45 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.rateme.R
 import com.example.rateme.data.AlbumWithArtistAndSongs
 import com.example.rateme.data.AlbumWithAvgRating
 import com.example.rateme.ui.components.AppBackground
 import com.example.rateme.ui.screens.*
 import com.example.rateme.ui.theme.RateMeTheme
 import com.example.rateme.viewmodel.MainViewModel
-import com.example.rateme.ui.screens.StatsScreen
-import com.example.rateme.ui.screens.SettingsScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val prefs = getSharedPreferences("settings", MODE_PRIVATE)
+        val lang = prefs.getString("language", "ru") ?: "ru"
+        val locale = if (lang == "en") java.util.Locale("en") else java.util.Locale("ru")
+        java.util.Locale.setDefault(locale)
+        val config = resources.configuration
+        config.setLocale(locale)
+        @Suppress("DEPRECATION")
+        resources.updateConfiguration(config, resources.displayMetrics)
+
+        val isDark = prefs.getBoolean("darkTheme", true)
+
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContent {
-            var isDarkTheme by rememberSaveable { mutableStateOf(true) }
+            var isDarkTheme by rememberSaveable { mutableStateOf(isDark) }
+            val context = LocalContext.current
             RateMeTheme(darkTheme = isDarkTheme) {
                 AppBackground(isDarkTheme = isDarkTheme) {
-                    RateMeApp(isDarkTheme = isDarkTheme, onThemeToggle = { isDarkTheme = !isDarkTheme })
+                    RateMeApp(
+                        isDarkTheme = isDarkTheme,
+                        onThemeToggle = {
+                            val newValue = !isDarkTheme
+                            isDarkTheme = newValue
+                            context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+                                .edit().putBoolean("darkTheme", newValue).apply()
+                        }
+                    )
                 }
             }
         }
@@ -106,136 +122,77 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Главная
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
-                    ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
                         IconButton(onClick = {
                             navController.navigate("home") {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                popUpTo("home") { inclusive = true }
                                 launchSingleTop = true
-                                restoreState = true
                             }
                         }) {
-                            Icon(
-                                Icons.Filled.Home,
-                                contentDescription = null,
+                            Icon(Icons.Filled.Home, contentDescription = null,
                                 tint = if (currentRoute == "home") MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         }
-                        Text(
-                            "Главная",
-                            style = MaterialTheme.typography.labelSmall,
+                        Text(stringResource(R.string.home), style = MaterialTheme.typography.labelSmall,
                             color = if (currentRoute == "home") MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     }
-                    // Оценки
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
-                    ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
                         IconButton(onClick = {
                             navController.navigate("rated") {
                                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+                                launchSingleTop = true; restoreState = true
                             }
                         }) {
-                            Icon(
-                                Icons.Filled.ThumbUp,
-                                contentDescription = null,
+                            Icon(Icons.Filled.ThumbUp, contentDescription = null,
                                 tint = if (currentRoute == "rated") MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         }
-                        Text(
-                            "Оценки",
-                            style = MaterialTheme.typography.labelSmall,
+                        Text(stringResource(R.string.ratings), style = MaterialTheme.typography.labelSmall,
                             color = if (currentRoute == "rated") MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     }
-                    // Добавить
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        FloatingActionButton(
-                            onClick = {
-                                navController.navigate("add") {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            modifier = Modifier
-                                .size(48.dp)
-                                .shadow(8.dp, CircleShape),
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            shape = CircleShape
-                        ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                        FloatingActionButton(onClick = {
+                            navController.navigate("add") {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true; restoreState = true
+                            }
+                        }, modifier = Modifier.size(48.dp).shadow(8.dp, CircleShape),
+                            containerColor = MaterialTheme.colorScheme.primary, shape = CircleShape) {
                             Icon(Icons.Filled.Add, contentDescription = "Добавить", tint = MaterialTheme.colorScheme.onPrimary)
                         }
-                        Text(
-                            "Добавить",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Text(stringResource(R.string.add), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     }
-                    // Рейтинг
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
-                    ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
                         IconButton(onClick = {
                             navController.navigate("rating") {
                                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+                                launchSingleTop = true; restoreState = true
                             }
                         }) {
-                            Icon(
-                                Icons.Filled.Favorite,
-                                contentDescription = null,
+                            Icon(Icons.Filled.Favorite, contentDescription = null,
                                 tint = if (currentRoute == "rating") MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         }
-                        Text(
-                            "Рейтинг",
-                            style = MaterialTheme.typography.labelSmall,
+                        Text(stringResource(R.string.rating), style = MaterialTheme.typography.labelSmall,
                             color = if (currentRoute == "rating") MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     }
-                    // Статистика
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
-                    ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
                         IconButton(onClick = {
                             navController.navigate("stats") {
                                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+                                launchSingleTop = true; restoreState = true
                             }
                         }) {
-                            Icon(
-                                Icons.Filled.EmojiEvents,
-                                contentDescription = null,
+                            Icon(Icons.Filled.EmojiEvents, contentDescription = null,
                                 tint = if (currentRoute == "stats") MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                         }
-                        Text(
-                            "Статистика",
-                            style = MaterialTheme.typography.labelSmall,
+                        Text(stringResource(R.string.stats), style = MaterialTheme.typography.labelSmall,
                             color = if (currentRoute == "stats") MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                     }
                 }
             }
@@ -276,14 +233,14 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                     showActions = false,
                     showTopBar = true,
                     showAddButton = false,
-                    title = "Оценённые альбомы",
+                    title = stringResource(R.string.evaluated_albums),
                     isLoading = false
                 )
             }
             composable("rating") {
                 RatingScreen(
                     albums = albumsByRating,
-                    onBack = {},
+                    onBack = { navController.navigate("home") },
                     onAlbumClick = { navController.navigate("album_view/$it") }
                 )
             }
@@ -314,13 +271,12 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                 )
             }
             composable("add") {
-                val context = LocalContext.current
                 AddAlbumScreen(
                     onAlbumSelected = { artist, album, coverUrl, tracks, previews, year ->
                         viewModel.addAlbumWithSongs(
                             artist, album, tracks, coverUrl, previews, year,
                             onDuplicate = {
-                                android.widget.Toast.makeText(context, "Данный альбом уже добавлен", android.widget.Toast.LENGTH_SHORT).show()
+                                android.widget.Toast.makeText(context, context.getString(R.string.duplicate_album), android.widget.Toast.LENGTH_SHORT).show()
                             }
                         )
                         navController.navigate("home")
@@ -331,8 +287,7 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
             composable("stats") {
                 StatsScreen(
                     albums = albums,
-                    ratedAlbums = ratedAlbums,
-                    onBack = {}
+                    onBack = { navController.navigate("home") }
                 )
             }
             composable("settings") {
