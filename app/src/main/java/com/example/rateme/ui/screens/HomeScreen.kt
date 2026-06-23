@@ -1,8 +1,6 @@
 package com.example.rateme.ui.screens
 
-import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,13 +23,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.rateme.LocalAnimatedContentScope
+import com.example.rateme.LocalSharedTransitionScope
 import com.example.rateme.R
 import com.example.rateme.data.AlbumWithArtistAndSongs
 import com.example.rateme.data.model.Album
 import com.example.rateme.data.network.LastFmAlbumSummary
 import com.example.rateme.ui.components.ShimmerLoadingList
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     albums: List<AlbumWithArtistAndSongs>,
@@ -50,12 +50,19 @@ fun HomeScreen(
     title: String = "RateMe",
     isLoading: Boolean = false,
     isDashboard: Boolean = true,
-    sharedTransitionScope: SharedTransitionScope,
-    animatedContentScope: AnimatedContentScope,
     recommendations: List<LastFmAlbumSummary> = emptyList(),
     onRecommendationClick: (LastFmAlbumSummary) -> Unit = {}
 ) {
     var albumToDelete by remember { mutableStateOf<Album?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+
+    val filteredAlbums = remember(albums, searchQuery) {
+        if (searchQuery.isBlank()) albums
+        else albums.filter { 
+            it.album.title.contains(searchQuery, ignoreCase = true) || 
+            it.artist.name.contains(searchQuery, ignoreCase = true) 
+        }
+    }
 
     if (albumToDelete != null) {
         AlertDialog(
@@ -88,14 +95,14 @@ fun HomeScreen(
         }
     }
 
-    val topOfTheMonth = remember(albums) {
+    val bestRated = remember(albums) {
         albums.filter { album ->
             val ratedCount = album.songs.count { it.rating != null }
             ratedCount == album.songs.size && album.songs.isNotEmpty()
         }.sortedByDescending { it.songs.mapNotNull { s -> s.rating }.average() }.take(5)
     }
 
-    val recommendation = remember(albums) {
+    val newAlbums = remember(albums) {
         albums.filter { album -> album.songs.all { it.rating == null } }
             .sortedByDescending { it.album.id }
             .take(5)
@@ -140,16 +147,39 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(bottom = 80.dp)
             ) {
+                if (!isDashboard) {
+                    item {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            placeholder = { Text("Поиск альбома или артиста") },
+                            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(Icons.Filled.Close, contentDescription = null)
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.large
+                        )
+                    }
+                }
+
                 if (isDashboard) {
-                    if (recommendation.isNotEmpty()) {
+                    if (newAlbums.isNotEmpty()) {
                         item {
                             SectionHeader("Новые альбомы")
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                items(recommendation) { item ->
-                                    DashboardAlbumCard(item, onAlbumClick, { albumToDelete = it.album }, sharedTransitionScope, animatedContentScope)
+                                items(newAlbums) { item ->
+                                    DashboardAlbumCard(item, onAlbumClick, { albumToDelete = it.album })
                                 }
                             }
                         }
@@ -164,22 +194,22 @@ fun HomeScreen(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 items(inProgress) { item ->
-                                    DashboardAlbumCard(item, onAlbumClick, { albumToDelete = it.album }, sharedTransitionScope, animatedContentScope)
+                                    DashboardAlbumCard(item, onAlbumClick, { albumToDelete = it.album })
                                 }
                             }
                         }
                     }
 
-                    if (topOfTheMonth.isNotEmpty()) {
+                    if (bestRated.isNotEmpty()) {
                         item {
                             Spacer(modifier = Modifier.height(24.dp))
-                            SectionHeader("Топ месяца")
+                            SectionHeader("Лучшие альбомы")
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                items(topOfTheMonth) { item ->
-                                    DashboardAlbumCard(item, onAlbumClick, { albumToDelete = it.album }, sharedTransitionScope, animatedContentScope)
+                                items(bestRated) { item ->
+                                    DashboardAlbumCard(item, onAlbumClick, { albumToDelete = it.album })
                                 }
                             }
                         }
@@ -200,15 +230,13 @@ fun HomeScreen(
                         }
                     }
                 } else {
-                    items(albums) { item ->
+                    items(filteredAlbums) { item ->
                         AlbumCard(
                             item = item,
                             showActions = showActions,
                             onAlbumClick = onAlbumClick,
                             onDeleteClick = { albumToDelete = item.album },
-                            onEditClick = { onAlbumClick(item.album.id) },
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedContentScope = animatedContentScope
+                            onEditClick = { onAlbumClick(item.album.id) }
                         )
                     }
                 }
@@ -234,12 +262,12 @@ fun SectionHeader(title: String) {
 fun DashboardAlbumCard(
     item: AlbumWithArtistAndSongs,
     onClick: (Long) -> Unit,
-    onLongClick: (AlbumWithArtistAndSongs) -> Unit,
-    sharedTransitionScope: SharedTransitionScope,
-    animatedContentScope: AnimatedContentScope
+    onLongClick: (AlbumWithArtistAndSongs) -> Unit
 ) {
     val avgRating = item.songs.mapNotNull { it.rating }.takeIf { it.isNotEmpty() }?.average()?.let { String.format("%.1f", it) } ?: "—"
-    
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedContentScope = LocalAnimatedContentScope.current
+
     Column(
         modifier = Modifier
             .width(140.dp)
@@ -248,35 +276,45 @@ fun DashboardAlbumCard(
                 onLongClick = { onLongClick(item) }
             )
     ) {
-        with(sharedTransitionScope) {
-            if (!item.album.coverUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = item.album.coverUrl,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(140.dp)
-                        .clip(MaterialTheme.shapes.medium)
-                        .sharedElement(
-                            rememberSharedContentState(key = "album-cover-${item.album.id}"),
-                            animatedVisibilityScope = animatedContentScope
-                        ),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(140.dp)
-                        .clip(MaterialTheme.shapes.medium)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .sharedElement(
-                            rememberSharedContentState(key = "album-cover-${item.album.id}"),
-                            animatedVisibilityScope = animatedContentScope
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Filled.Album, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
+        if (sharedTransitionScope != null && animatedContentScope != null) {
+            with(sharedTransitionScope) {
+                if (!item.album.coverUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = item.album.coverUrl,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(140.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                            .sharedElement(
+                                rememberSharedContentState(key = "album-cover-${item.album.id}"),
+                                animatedVisibilityScope = animatedContentScope
+                            ),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(140.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .sharedElement(
+                                rememberSharedContentState(key = "album-cover-${item.album.id}"),
+                                animatedVisibilityScope = animatedContentScope
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Filled.Album, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
                 }
             }
+        } else {
+             // Fallback if scope is missing
+            AsyncImage(
+                model = item.album.coverUrl,
+                contentDescription = null,
+                modifier = Modifier.size(140.dp).clip(MaterialTheme.shapes.medium),
+                contentScale = ContentScale.Crop
+            )
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(item.album.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -321,13 +359,13 @@ fun AlbumCard(
     showActions: Boolean,
     onAlbumClick: (Long) -> Unit,
     onDeleteClick: () -> Unit,
-    onEditClick: () -> Unit,
-    sharedTransitionScope: SharedTransitionScope,
-    animatedContentScope: AnimatedContentScope
+    onEditClick: () -> Unit
 ) {
     val ratedCount = item.songs.count { it.rating != null }
     val totalCount = item.songs.size
     val avgRating = item.songs.mapNotNull { it.rating }.takeIf { it.isNotEmpty() }?.average()?.let { String.format("%.1f", it) } ?: "—"
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedContentScope = LocalAnimatedContentScope.current
 
     val isFullyRated = ratedCount == totalCount && totalCount > 0
     val backgroundColor = if (isFullyRated) {
@@ -350,31 +388,35 @@ fun AlbumCard(
         colors = CardDefaults.cardColors(containerColor = backgroundColor)
     ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            with(sharedTransitionScope) {
-                if (!item.album.coverUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = item.album.coverUrl,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(56.dp)
-                            .sharedElement(
-                                rememberSharedContentState(key = "album-cover-${item.album.id}"),
-                                animatedVisibilityScope = animatedContentScope
-                            )
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .sharedElement(
-                                rememberSharedContentState(key = "album-cover-${item.album.id}"),
-                                animatedVisibilityScope = animatedContentScope
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Filled.Album, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+            if (sharedTransitionScope != null && animatedContentScope != null) {
+                with(sharedTransitionScope) {
+                    if (!item.album.coverUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = item.album.coverUrl,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(56.dp)
+                                .sharedElement(
+                                    rememberSharedContentState(key = "album-cover-${item.album.id}"),
+                                    animatedVisibilityScope = animatedContentScope
+                                )
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .sharedElement(
+                                    rememberSharedContentState(key = "album-cover-${item.album.id}"),
+                                    animatedVisibilityScope = animatedContentScope
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Filled.Album, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
+            } else {
+                AsyncImage(model = item.album.coverUrl, contentDescription = null, modifier = Modifier.size(56.dp))
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -383,6 +425,24 @@ fun AlbumCard(
                 Text("⭐ $avgRating/10", style = MaterialTheme.typography.labelSmall)
                 Text(statusText, style = MaterialTheme.typography.labelSmall)
             }
+
+            // Status Icon
+            if (isFullyRated) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = null,
+                    tint = Color(0xFF4CAF50), // Green
+                    modifier = Modifier.size(24.dp).padding(horizontal = 4.dp)
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.Pending,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                    modifier = Modifier.size(24.dp).padding(horizontal = 4.dp)
+                )
+            }
+
             if (showActions) {
                 IconButton(onClick = onEditClick) { Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.edit), tint = MaterialTheme.colorScheme.primary) }
                 IconButton(onClick = onDeleteClick) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.delete_confirm), tint = MaterialTheme.colorScheme.error) }

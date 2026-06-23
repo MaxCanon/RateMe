@@ -26,6 +26,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.rateme.LocalAnimatedContentScope
+import com.example.rateme.LocalSharedTransitionScope
 import com.example.rateme.R
 import com.example.rateme.data.AlbumWithArtistAndSongs
 import com.example.rateme.data.model.Song
@@ -40,9 +42,7 @@ fun AlbumScreen(
     onRatingChanged: (Long, Int) -> Unit,
     onShareClick: (Intent) -> Unit,
     onTrackListen: () -> Unit,
-    readOnly: Boolean = false,
-    sharedTransitionScope: SharedTransitionScope,
-    animatedContentScope: AnimatedContentScope
+    readOnly: Boolean = false
 ) {
     val context = LocalContext.current
     if (albumWithSongs == null) {
@@ -52,6 +52,8 @@ fun AlbumScreen(
 
     var playingSongId by remember { mutableStateOf<Long?>(null) }
     var seedColor by remember { mutableStateOf<Color?>(null) }
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedContentScope = LocalAnimatedContentScope.current
 
     RateMeTheme(seedColor = seedColor) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -134,43 +136,49 @@ fun AlbumScreen(
                 ) {
                     item {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            with(sharedTransitionScope) {
-                                if (!albumWithSongs.album.coverUrl.isNullOrBlank()) {
-                                    AsyncImage(
-                                        model = coil.request.ImageRequest.Builder(LocalContext.current)
-                                            .data(albumWithSongs.album.coverUrl)
-                                            .allowHardware(false)
-                                            .build(),
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .size(200.dp)
-                                            .sharedElement(
-                                                rememberSharedContentState(key = "album-cover-${albumWithSongs.album.id}"),
-                                                animatedVisibilityScope = animatedContentScope
-                                            ),
-                                        onSuccess = { result ->
-                                            val bitmap = (result.result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
-                                            bitmap?.let {
-                                                androidx.palette.graphics.Palette.from(it).generate().vibrantSwatch?.rgb?.let { rgb ->
-                                                    seedColor = Color(rgb)
+                            if (sharedTransitionScope != null && animatedContentScope != null) {
+                                with(sharedTransitionScope) {
+                                    if (!albumWithSongs.album.coverUrl.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                                .data(albumWithSongs.album.coverUrl)
+                                                .allowHardware(false)
+                                                .build(),
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .size(200.dp)
+                                                .sharedElement(
+                                                    rememberSharedContentState(key = "album-cover-${albumWithSongs.album.id}"),
+                                                    animatedVisibilityScope = animatedContentScope
+                                                ),
+                                            onSuccess = { result ->
+                                                val bitmap = (result.result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                                                bitmap?.let {
+                                                    val palette = androidx.palette.graphics.Palette.from(it).generate()
+                                                    val swatch = palette.vibrantSwatch ?: palette.dominantSwatch ?: palette.mutedSwatch
+                                                    swatch?.rgb?.let { rgb ->
+                                                        seedColor = Color(rgb)
+                                                    }
                                                 }
                                             }
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(200.dp)
+                                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                                .sharedElement(
+                                                    rememberSharedContentState(key = "album-cover-${albumWithSongs.album.id}"),
+                                                    animatedVisibilityScope = animatedContentScope
+                                                ),
+                                            contentAlignment = androidx.compose.ui.Alignment.Center
+                                        ) {
+                                            Icon(Icons.Filled.Album, contentDescription = null, modifier = Modifier.size(100.dp), tint = MaterialTheme.colorScheme.primary)
                                         }
-                                    )
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(200.dp)
-                                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                                            .sharedElement(
-                                                rememberSharedContentState(key = "album-cover-${albumWithSongs.album.id}"),
-                                                animatedVisibilityScope = animatedContentScope
-                                            ),
-                                        contentAlignment = androidx.compose.ui.Alignment.Center
-                                    ) {
-                                        Icon(Icons.Filled.Album, contentDescription = null, modifier = Modifier.size(100.dp), tint = MaterialTheme.colorScheme.primary)
                                     }
                                 }
+                            } else {
+                                AsyncImage(model = albumWithSongs.album.coverUrl, contentDescription = null, modifier = Modifier.size(200.dp))
                             }
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(albumWithSongs.artist.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)

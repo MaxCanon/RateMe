@@ -33,10 +33,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _newAchievement = MutableLiveData<Achievement?>(null)
     val newAchievement: LiveData<Achievement?> = _newAchievement
 
-    init {
-        loadRecommendations()
-    }
-
     fun loadRecommendations() = viewModelScope.launch {
         try {
             val albums = dao.getAllAlbumsWithSongs().first()
@@ -126,6 +122,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun incrementAchievement(achId: String) {
         AchievementManager.increment(getApplication<Application>().applicationContext, achId) { ach ->
+            _newAchievement.postValue(ach)
+        }
+    }
+
+    fun checkStreakReset() {
+        AchievementManager.checkAndUpdate(getApplication<Application>().applicationContext, totalRated = -2) { ach ->
             _newAchievement.postValue(ach)
         }
     }

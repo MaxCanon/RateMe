@@ -61,6 +61,8 @@ fun AchievementCard(ach: Achievement, progress: Int, unlocked: Boolean) {
         Tier.LEGENDARY -> Color(0xFFFF4500)
     }
 
+    val displayProgress = if (unlocked) ach.goal else progress
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -80,13 +82,13 @@ fun AchievementCard(ach: Achievement, progress: Int, unlocked: Boolean) {
                 Text(ach.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 Spacer(modifier = Modifier.height(4.dp))
                 LinearProgressIndicator(
-                    progress = { (progress.toFloat() / ach.goal).coerceAtMost(1f) },
+                    progress = { (displayProgress.toFloat() / ach.goal).coerceAtMost(1f) },
                     modifier = Modifier.fillMaxWidth().height(6.dp),
                     color = if (unlocked) tierColor else MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                Text("$progress / ${ach.goal}", style = MaterialTheme.typography.labelSmall)
+                Text("$displayProgress / ${ach.goal}", style = MaterialTheme.typography.labelSmall)
             }
         }
     }

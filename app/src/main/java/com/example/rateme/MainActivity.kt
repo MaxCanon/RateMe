@@ -41,6 +41,11 @@ import com.example.rateme.ui.screens.*
 import com.example.rateme.ui.theme.RateMeTheme
 import com.example.rateme.viewmodel.MainViewModel
 
+@OptIn(ExperimentalSharedTransitionApi::class)
+val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { null }
+@OptIn(ExperimentalSharedTransitionApi::class)
+val LocalAnimatedContentScope = compositionLocalOf<AnimatedContentScope?> { null }
+
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,13 +95,20 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
     }
 
     LaunchedEffect(Unit) {
-        viewModel.allAlbums.collect { albums = it; isLoading = false }
+        viewModel.allAlbums.collect { 
+            albums = it
+            isLoading = false 
+            if (it.isNotEmpty() && recommendations.isEmpty()) {
+                viewModel.loadRecommendations()
+            }
+        }
     }
     LaunchedEffect(Unit) { viewModel.ratedAlbums.collect { ratedAlbums = it } }
     LaunchedEffect(Unit) { viewModel.albumsByRating.collect { albumsByRating = it } }
 
     LaunchedEffect(Unit) {
         viewModel.incrementAchievement("14")
+        viewModel.checkStreakReset()
     }
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -168,91 +180,90 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
         }
     ) { innerPadding ->
         SharedTransitionLayout {
-            NavHost(
-                navController = navController, 
-                startDestination = "home", 
-                modifier = Modifier.padding(top = innerPadding.calculateTopPadding())
-            ) {
-                composable("home") {
-                    HomeScreen(albums = albums, onAlbumClick = { navController.navigate("album/$it") }, onAddClick = {}, onDeleteClick = { viewModel.deleteAlbum(it) },
-                        isDarkTheme = isDarkTheme, onThemeToggle = {}, onRatedClick = {}, onRatingClick = {},
-                        showActions = true, showTopBar = true, showAddButton = false, isLoading = isLoading,
-                        onSettingsClick = { navController.navigate("settings") },
-                        sharedTransitionScope = this@SharedTransitionLayout,
-                        animatedContentScope = this@composable,
-                        recommendations = recommendations,
-                        onRecommendationClick = { item ->
-                            navController.navigate("add?query=${item.artist} ${item.name}")
-                        })
-                }
-                composable("rated") {
-                    HomeScreen(albums = ratedAlbums, onAlbumClick = { navController.navigate("album/$it") }, onAddClick = {}, onDeleteClick = { viewModel.deleteAlbum(it) },
-                        isDarkTheme = isDarkTheme, onThemeToggle = {}, onRatedClick = {}, onRatingClick = {},
-                        showActions = false, showTopBar = true, showAddButton = false, title = stringResource(R.string.evaluated_albums), isLoading = false, isDashboard = false,
-                        sharedTransitionScope = this@SharedTransitionLayout,
-                        animatedContentScope = this@composable)
-                }
-                composable("rating") {
-                    RatingScreen(
-                        albums = albumsByRating, 
-                        onBack = { navController.navigate("home") }, 
-                        onAlbumClick = { navController.navigate("album_view/$it") },
-                        onDeleteClick = { id ->
-                            albums.find { it.album.id == id }?.let { viewModel.deleteAlbum(it.album) }
+            CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+                NavHost(navController = navController, startDestination = "home", modifier = Modifier.padding(top = innerPadding.calculateTopPadding())) {
+                    composable("home") {
+                        CompositionLocalProvider(LocalAnimatedContentScope provides this) {
+                            HomeScreen(albums = albums, onAlbumClick = { navController.navigate("album/$it") }, onAddClick = {}, onDeleteClick = { viewModel.deleteAlbum(it) },
+                                isDarkTheme = isDarkTheme, onThemeToggle = {}, onRatedClick = {}, onRatingClick = {},
+                                showActions = true, showTopBar = true, showAddButton = false, isLoading = isLoading,
+                                onSettingsClick = { navController.navigate("settings") },
+                                recommendations = recommendations,
+                                onRecommendationClick = { item ->
+                                    navController.navigate("add?query=${item.artist} ${item.name}")
+                                })
                         }
-                    )
-                }
-                composable("album/{albumId}") { backStackEntry ->
-                    val id = backStackEntry.arguments?.getString("albumId")?.toLongOrNull()
-                    AlbumScreen(albumWithSongs = albums.find { it.album.id == id }, onBack = { navController.navigate("home") },
-                        onRatingChanged = { songId, rating -> viewModel.updateRating(songId, rating, isDarkTheme) },
-                        onShareClick = { navController.context.startActivity(Intent.createChooser(it, "Поделиться")) }, 
-                        onTrackListen = { viewModel.incrementAchievement("27") },
-                        readOnly = false,
-                        sharedTransitionScope = this@SharedTransitionLayout,
-                        animatedContentScope = this@composable)
-                }
-                composable("album_view/{albumId}") { backStackEntry ->
-                    val id = backStackEntry.arguments?.getString("albumId")?.toLongOrNull()
-                    AlbumScreen(albumWithSongs = albums.find { it.album.id == id }, onBack = { navController.navigate("rating") },
-                        onRatingChanged = { _, _ -> },
-                        onShareClick = { navController.context.startActivity(Intent.createChooser(it, "Поделиться")) }, 
-                        onTrackListen = { viewModel.incrementAchievement("27") },
-                        readOnly = true,
-                        sharedTransitionScope = this@SharedTransitionLayout,
-                        animatedContentScope = this@composable)
-                }
-                composable(
-                    "add?query={query}",
-                    arguments = listOf(androidx.navigation.navArgument("query") { defaultValue = ""; nullable = true })
-                ) { backStackEntry ->
-                    val initialQuery = backStackEntry.arguments?.getString("query")
-                    AddAlbumScreen(
-                        initialQuery = initialQuery,
-                        onAlbumSelected = { artist, album, coverUrl, tracks, previews, year ->
-                            viewModel.addAlbumWithSongs(artist, album, tracks, coverUrl, previews, year,
-                                onDuplicate = { android.widget.Toast.makeText(appContext, appContext.getString(R.string.duplicate_album), android.widget.Toast.LENGTH_SHORT).show() })
-                            navController.navigate("home") {
-                                popUpTo("home") { inclusive = true }
+                    }
+                    composable("rated") {
+                        CompositionLocalProvider(LocalAnimatedContentScope provides this) {
+                            HomeScreen(albums = ratedAlbums, onAlbumClick = { navController.navigate("album/$it") }, onAddClick = {}, onDeleteClick = { viewModel.deleteAlbum(it) },
+                                isDarkTheme = isDarkTheme, onThemeToggle = {}, onRatedClick = {}, onRatingClick = {},
+                                showActions = false, showTopBar = true, showAddButton = false, title = stringResource(R.string.evaluated_albums), isLoading = false, isDashboard = false)
+                        }
+                    }
+                    composable("rating") {
+                        RatingScreen(
+                            albums = albumsByRating, 
+                            onBack = { navController.navigate("home") }, 
+                            onAlbumClick = { navController.navigate("album_view/$it") },
+                            onDeleteClick = { id ->
+                                albums.find { it.album.id == id }?.let { viewModel.deleteAlbum(it.album) }
                             }
-                        }, 
-                        onBack = { navController.navigate("home") }
-                    )
-                }
-                composable("stats") {
-                    AchievementsScreen(onBack = { navController.navigate("home") })
-                }
-                composable("settings") {
-                    SettingsScreen(isDarkTheme = isDarkTheme, onThemeToggle = onThemeToggle,
-                        onBack = { navController.navigate("home") }, onStatsClick = { 
-                            viewModel.incrementAchievement("19")
-                            navController.navigate("oldstats") 
-                        }, onLanguageChange = {
-                            viewModel.incrementAchievement("7")
-                        })
-                }
-                composable("oldstats") {
-                    StatsScreen(albums = albums, onBack = { navController.navigate("settings") })
+                        )
+                    }
+                    composable("album/{albumId}") { backStackEntry ->
+                        val id = backStackEntry.arguments?.getString("albumId")?.toLongOrNull()
+                        CompositionLocalProvider(LocalAnimatedContentScope provides this) {
+                            AlbumScreen(albumWithSongs = albums.find { it.album.id == id }, onBack = { navController.navigate("home") },
+                                onRatingChanged = { songId, rating -> viewModel.updateRating(songId, rating, isDarkTheme) },
+                                onShareClick = { navController.context.startActivity(Intent.createChooser(it, "Поделиться")) }, 
+                                onTrackListen = { viewModel.incrementAchievement("27") },
+                                readOnly = false)
+                        }
+                    }
+                    composable("album_view/{albumId}") { backStackEntry ->
+                        val id = backStackEntry.arguments?.getString("albumId")?.toLongOrNull()
+                        CompositionLocalProvider(LocalAnimatedContentScope provides this) {
+                            AlbumScreen(albumWithSongs = albums.find { it.album.id == id }, onBack = { navController.navigate("rating") },
+                                onRatingChanged = { _, _ -> },
+                                onShareClick = { navController.context.startActivity(Intent.createChooser(it, "Поделиться")) }, 
+                                onTrackListen = { viewModel.incrementAchievement("27") },
+                                readOnly = true)
+                        }
+                    }
+                    composable(
+                        "add?query={query}",
+                        arguments = listOf(androidx.navigation.navArgument("query") { defaultValue = ""; nullable = true })
+                    ) { backStackEntry ->
+                        val initialQuery = backStackEntry.arguments?.getString("query")
+                        AddAlbumScreen(
+                            initialQuery = initialQuery,
+                            onAlbumSelected = { artist, album, coverUrl, tracks, previews, year ->
+                                viewModel.addAlbumWithSongs(artist, album, tracks, coverUrl, previews, year,
+                                    onDuplicate = { android.widget.Toast.makeText(appContext, appContext.getString(R.string.duplicate_album), android.widget.Toast.LENGTH_SHORT).show() })
+                                navController.navigate("home") {
+                                    popUpTo("home") { inclusive = true }
+                                }
+                            }, 
+                            onBack = { navController.navigate("home") }
+                        )
+                    }
+                    composable("stats") {
+                        LaunchedEffect(Unit) { viewModel.incrementAchievement("19") }
+                        AchievementsScreen(onBack = { navController.navigate("home") })
+                    }
+                    composable("settings") {
+                        SettingsScreen(isDarkTheme = isDarkTheme, onThemeToggle = onThemeToggle,
+                            onBack = { navController.navigate("home") }, onStatsClick = { 
+                                navController.navigate("oldstats") 
+                            }, onLanguageChange = {
+                                viewModel.incrementAchievement("7")
+                            })
+                    }
+                    composable("oldstats") {
+                        LaunchedEffect(Unit) { viewModel.incrementAchievement("19") }
+                        StatsScreen(albums = albums, onBack = { navController.navigate("settings") })
+                    }
                 }
             }
         }

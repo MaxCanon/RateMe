@@ -28,7 +28,7 @@ interface AlbumDao {
     suspend fun updateRating(songId: Long, score: Int)
 
     @Transaction
-    @Query("SELECT * FROM albums ORDER BY title")
+    @Query("SELECT * FROM albums ORDER BY id DESC")
     fun getAllAlbumsWithSongs(): Flow<List<AlbumWithArtistAndSongs>>
 
     @Transaction
@@ -52,7 +52,7 @@ interface AlbumDao {
     @Query("""
         SELECT * FROM albums 
         WHERE id IN (SELECT DISTINCT albumId FROM songs WHERE rating IS NOT NULL)
-        ORDER BY title
+        ORDER BY id DESC
     """)
     fun getRatedAlbums(): Flow<List<AlbumWithArtistAndSongs>>
 

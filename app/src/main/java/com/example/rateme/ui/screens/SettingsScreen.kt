@@ -81,7 +81,7 @@ fun SettingsScreen(
             SettingsItem(
                 icon = Icons.Filled.Info,
                 title = stringResource(R.string.version),
-                subtitle = "0.7",
+                subtitle = "0.8",
                 onClick = { }
             )
 
@@ -95,7 +95,7 @@ fun SettingsScreen(
             SettingsItem(
                 icon = Icons.Filled.Person,
                 title = stringResource(R.string.author),
-                subtitle = "@brikiton",
+                subtitle = "tg: @brikiton",
                 onClick = { }
             )
         }
