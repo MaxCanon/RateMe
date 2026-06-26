@@ -2,6 +2,9 @@ package com.example.rateme.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.*
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import com.example.rateme.data.AchievementManager
 import com.example.rateme.data.AlbumDao
 import com.example.rateme.data.AlbumWithArtistAndSongs
@@ -32,6 +35,118 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _newAchievement = MutableLiveData<Achievement?>(null)
     val newAchievement: LiveData<Achievement?> = _newAchievement
+
+    // Playback State using Media3 ExoPlayer
+    private var exoPlayer: ExoPlayer? = null
+    
+    private val _currentlyPlaying = MutableStateFlow<Song?>(null)
+    val currentlyPlaying: StateFlow<Song?> = _currentlyPlaying.asStateFlow()
+
+    private val _playingArtistName = MutableStateFlow<String?>(null)
+    val playingArtistName: StateFlow<String?> = _playingArtistName.asStateFlow()
+
+    private val _playingColor = MutableStateFlow<androidx.compose.ui.graphics.Color?>(null)
+    val playingColor: StateFlow<androidx.compose.ui.graphics.Color?> = _playingColor.asStateFlow()
+    
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+
+    private val _isPreparing = MutableStateFlow(false)
+    val isPreparing: StateFlow<Boolean> = _isPreparing.asStateFlow()
+
+    private val _playbackPosition = MutableStateFlow(0L)
+    val playbackPosition: StateFlow<Long> = _playbackPosition.asStateFlow()
+
+    private val _playbackDuration = MutableStateFlow(0L)
+    val playbackDuration: StateFlow<Long> = _playbackDuration.asStateFlow()
+
+    private var progressJob: kotlinx.coroutines.Job? = null
+
+    init {
+        exoPlayer = ExoPlayer.Builder(application).build().apply {
+            addListener(object : Player.Listener {
+                override fun onIsPlayingChanged(playing: Boolean) {
+                    _isPlaying.value = playing
+                    if (playing) startProgressPolling() else stopProgressPolling()
+                }
+
+                override fun onPlaybackStateChanged(state: Int) {
+                    _isPreparing.value = state == Player.STATE_BUFFERING
+                    if (state == Player.STATE_READY) {
+                        _playbackDuration.value = duration.coerceAtLeast(0L)
+                    }
+                    if (state == Player.STATE_ENDED) {
+                        stopPlayback()
+                    }
+                }
+
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                    android.util.Log.e("ExoPlayer", "Error: ${error.message}")
+                    stopPlayback()
+                }
+            })
+        }
+    }
+
+    fun togglePlayback(song: Song, artistName: String? = null, color: androidx.compose.ui.graphics.Color? = null) {
+        val player = exoPlayer ?: return
+        
+        if (_currentlyPlaying.value?.id == song.id) {
+            if (player.isPlaying) {
+                player.pause()
+            } else {
+                player.play()
+            }
+        } else {
+            _playingArtistName.value = artistName
+            _playingColor.value = color
+            _currentlyPlaying.value = song
+            val mediaItem = MediaItem.fromUri(song.previewUrl ?: "")
+            player.setMediaItem(mediaItem)
+            player.prepare()
+            player.play()
+        }
+    }
+
+    private fun startProgressPolling() {
+        progressJob?.cancel()
+        progressJob = viewModelScope.launch {
+            while (true) {
+                exoPlayer?.let {
+                    _playbackPosition.value = it.currentPosition.coerceAtLeast(0L)
+                }
+                kotlinx.coroutines.delay(50)
+            }
+        }
+    }
+
+    private fun stopProgressPolling() {
+        progressJob?.cancel()
+    }
+
+    fun seekTo(position: Long) {
+        exoPlayer?.seekTo(position)
+        _playbackPosition.value = position
+    }
+
+    fun stopPlayback() {
+        stopProgressPolling()
+        exoPlayer?.stop()
+        exoPlayer?.clearMediaItems()
+        _currentlyPlaying.value = null
+        _playingArtistName.value = null
+        _playingColor.value = null
+        _isPlaying.value = false
+        _isPreparing.value = false
+        _playbackPosition.value = 0L
+        _playbackDuration.value = 0L
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        exoPlayer?.release()
+        exoPlayer = null
+    }
 
     fun loadRecommendations() = viewModelScope.launch {
         try {
@@ -133,4 +248,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteAlbum(album: Album) = viewModelScope.launch { dao.deleteAlbum(album) }
+
+    fun refreshAllMetadata() = viewModelScope.launch {
+        val albums = dao.getAllAlbumsWithSongs().first()
+        albums.forEach { albumWithSongs ->
+            try {
+                var newYear: String? = null
+                
+                // Try Deezer first (most accurate)
+                val deezerSearch = ApiClient.deezerApi.searchAlbum("${albumWithSongs.artist.name} ${albumWithSongs.album.title}")
+                val deezerAlbum = deezerSearch.data?.firstOrNull { 
+                    it.title?.contains(albumWithSongs.album.title, ignoreCase = true) == true 
+                }
+                newYear = deezerAlbum?.release_date?.take(4)
+
+                // Try iTunes fallback
+                if (newYear == null) {
+                    val itunesResp = ApiClient.iTunesApi.searchTrack("${albumWithSongs.artist.name} ${albumWithSongs.album.title}")
+                    newYear = itunesResp.results.firstOrNull()?.releaseDate?.take(4)
+                }
+
+                if (newYear != null && newYear != albumWithSongs.album.year) {
+                    dao.updateAlbum(albumWithSongs.album.copy(year = newYear))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MetadataRefresh", "Failed for ${albumWithSongs.album.title}: ${e.message}")
+            }
+        }
+    }
 }

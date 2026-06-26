@@ -1,20 +1,23 @@
 package com.example.rateme.ui.screens
 
 import android.content.Intent
-import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
@@ -22,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,7 +46,10 @@ fun AlbumScreen(
     onRatingChanged: (Long, Int) -> Unit,
     onShareClick: (Intent) -> Unit,
     onTrackListen: () -> Unit,
-    readOnly: Boolean = false
+    readOnly: Boolean = false,
+    currentlyPlayingId: Long? = null,
+    isPlaying: Boolean = false,
+    onTogglePlayback: (Song, String, Color?) -> Unit = { _, _, _ -> }
 ) {
     val context = LocalContext.current
     if (albumWithSongs == null) {
@@ -50,12 +57,38 @@ fun AlbumScreen(
         return
     }
 
-    var playingSongId by remember { mutableStateOf<Long?>(null) }
     var seedColor by remember { mutableStateOf<Color?>(null) }
+    var showFullScreenCover by remember { mutableStateOf(false) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedContentScope = LocalAnimatedContentScope.current
 
+    if (showFullScreenCover && !albumWithSongs.album.coverUrl.isNullOrBlank()) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showFullScreenCover = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false // This makes it full screen
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.9f))
+                    .clickable { showFullScreenCover = false },
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = albumWithSongs.album.coverUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                    contentScale = ContentScale.Fit
+                )
+            }
+        }
+    }
+
     RateMeTheme(seedColor = seedColor) {
+        val themeColor = MaterialTheme.colorScheme.primary
+
         Box(modifier = Modifier.fillMaxSize()) {
             // Blurred Background
             if (!albumWithSongs.album.coverUrl.isNullOrBlank()) {
@@ -70,7 +103,7 @@ fun AlbumScreen(
                 )
             }
             
-            // Gradient overlay to ensure readability
+            // Gradient overlay
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -94,9 +127,9 @@ fun AlbumScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
+                                .height(56.dp)
                                 .padding(horizontal = 4.dp),
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = onBack) {
                                 Icon(
@@ -125,7 +158,24 @@ fun AlbumScreen(
                                 }
                                 onShareClick(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, shareText) })
                             }) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.share)) }
-                            TextButton(onClick = onBack) { Text(stringResource(R.string.done)) }
+                            
+                            // Use Button instead of TextButton for better contrast against backgrounds
+                            Button(
+                                onClick = onBack,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = themeColor,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                ),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                                modifier = Modifier.height(36.dp),
+                                shape = MaterialTheme.shapes.medium
+                            ) { 
+                                Text(
+                                    text = stringResource(R.string.done),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.ExtraBold
+                                ) 
+                            }
                         }
                     }
                 }
@@ -147,6 +197,7 @@ fun AlbumScreen(
                                             contentDescription = null,
                                             modifier = Modifier
                                                 .size(200.dp)
+                                                .clickable { showFullScreenCover = true }
                                                 .sharedElement(
                                                     rememberSharedContentState(key = "album-cover-${albumWithSongs.album.id}"),
                                                     animatedVisibilityScope = animatedContentScope
@@ -171,9 +222,9 @@ fun AlbumScreen(
                                                     rememberSharedContentState(key = "album-cover-${albumWithSongs.album.id}"),
                                                     animatedVisibilityScope = animatedContentScope
                                                 ),
-                                            contentAlignment = androidx.compose.ui.Alignment.Center
+                                            contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(Icons.Filled.Album, contentDescription = null, modifier = Modifier.size(100.dp), tint = MaterialTheme.colorScheme.primary)
+                                            Icon(Icons.Filled.Album, contentDescription = null, modifier = Modifier.size(100.dp), tint = themeColor)
                                         }
                                     }
                                 }
@@ -181,13 +232,22 @@ fun AlbumScreen(
                                 AsyncImage(model = albumWithSongs.album.coverUrl, contentDescription = null, modifier = Modifier.size(200.dp))
                             }
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text(albumWithSongs.artist.name, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                            Text(albumWithSongs.artist.name, style = MaterialTheme.typography.titleMedium, color = themeColor)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    stringResource(R.string.tracks_count, albumWithSongs.songs.size),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                if (!albumWithSongs.album.year.isNullOrBlank()) {
+                                    Text(" • ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                    Text(albumWithSongs.album.year, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
                             if (readOnly) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(stringResource(R.string.readonly_warning), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(stringResource(R.string.tracks_count, albumWithSongs.songs.size), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     itemsIndexed(albumWithSongs.songs) { index, song ->
@@ -196,13 +256,10 @@ fun AlbumScreen(
                             trackNumber = index + 1, 
                             onRatingChanged = { rating: Int -> onRatingChanged(song.id, rating) }, 
                             readOnly = readOnly,
-                            isPlaying = playingSongId == song.id,
+                            isPlaying = currentlyPlayingId == song.id && isPlaying,
                             onTogglePlay = { 
-                                if (playingSongId == song.id) playingSongId = null
-                                else {
-                                    onTrackListen()
-                                    playingSongId = song.id
-                                }
+                                onTrackListen()
+                                onTogglePlayback(song, albumWithSongs.artist.name, seedColor)
                             }
                         )
                     }
@@ -224,80 +281,110 @@ fun SongRow(
     isPlaying: Boolean,
     onTogglePlay: () -> Unit
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     var sliderValue by remember { mutableFloatStateOf(song.rating?.toFloat() ?: 0f) }
-    var mediaPlayer by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
-
-    fun releasePlayer() {
-        mediaPlayer?.let {
-            try {
-                if (it.isPlaying) it.stop()
-            } catch (_: Exception) {}
-            it.release()
-        }
-        mediaPlayer = null
-    }
-
-    LaunchedEffect(isPlaying) {
-        if (!isPlaying) {
-            releasePlayer()
-        } else if (mediaPlayer == null) {
-            try {
-                var url = song.previewUrl ?: ""
-                if (url.startsWith("http://")) url = url.replace("http://", "https://")
-                
-                val mp = android.media.MediaPlayer().apply {
-                    setDataSource(url)
-                    setAudioAttributes(
-                        android.media.AudioAttributes.Builder()
-                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
-                            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                            .build()
-                    )
-                    setOnPreparedListener { it.start() }
-                    setOnCompletionListener { onTogglePlay() }
-                    setOnErrorListener { _, _, _ -> onTogglePlay(); true }
-                    prepareAsync()
-                }
-                mediaPlayer = mp
-            } catch (e: Exception) {
-                android.util.Log.e("MediaPlayer", "Error: ${e.message}")
-                onTogglePlay()
-            }
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose { releasePlayer() }
-    }
+    val roundedValue = sliderValue.roundToInt()
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-        shape = MaterialTheme.shapes.large,
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+        shape = MaterialTheme.shapes.extraLarge,
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f))
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text("$trackNumber. ${song.title}", maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (!song.previewUrl.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Button(
-                    onClick = { onTogglePlay() },
-                    modifier = Modifier.height(32.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                    enabled = !readOnly || isPlaying
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "$trackNumber. ${song.title}",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                
+                Surface(
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = MaterialTheme.shapes.medium,
                 ) {
-                    Text(if (isPlaying) stringResource(R.string.stop) else stringResource(R.string.listen_30s), style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        text = roundedValue.toString(),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
                 }
             }
+
             Spacer(modifier = Modifier.height(8.dp))
-            Slider(value = sliderValue, onValueChange = { sliderValue = it }, onValueChangeFinished = { onRatingChanged(sliderValue.roundToInt()) }, valueRange = 0f..10f, steps = 10, modifier = Modifier.fillMaxWidth(), enabled = !readOnly)
-            if (readOnly) Text(stringResource(R.string.error_cant_rate), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                for (i in 0..10) Text("$i", style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+
+            Slider(
+                value = sliderValue,
+                onValueChange = { sliderValue = it },
+                onValueChangeFinished = { onRatingChanged(roundedValue) },
+                valueRange = 0f..10f,
+                steps = 9,
+                enabled = !readOnly,
+                colors = SliderDefaults.colors(
+                    activeTickColor = Color.Transparent,
+                    inactiveTickColor = Color.Transparent
+                )
+            )
+
+            // Perfect Alignment Scale: 0 • 2 • 4 • 6 • 8 • 10
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                (0..10).forEach { i ->
+                    val isSelected = i == roundedValue
+                    if (i % 2 == 0) {
+                        Text(
+                            text = i.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Normal,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary 
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            modifier = Modifier.width(18.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(if (isSelected) 6.dp else 3.dp)
+                                .background(
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary 
+                                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                                    shape = CircleShape
+                                )
+                        )
+                    }
+                }
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(stringResource(R.string.rating_value, sliderValue.roundToInt()), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.primary)
+
+            if (!song.previewUrl.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = { onTogglePlay() },
+                    modifier = if (isPlaying) Modifier.size(40.dp) else Modifier.fillMaxWidth().height(40.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    contentPadding = if (isPlaying) PaddingValues(0.dp) else ButtonDefaults.ContentPadding,
+                    enabled = !readOnly || isPlaying
+                ) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, 
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    if (!isPlaying) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Слушать отрывок")
+                    }
+                }
+            }
         }
     }
 }

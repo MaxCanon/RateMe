@@ -22,8 +22,8 @@
     <string name="done">Готово</string>
     <string name="back">←</string>
     <string name="edit">Оценить</string>
-    <string name="listen_30s">▶ Прослушать 30с</string>
-    <string name="stop">⏹ Стоп</string>
+    <string name="listen_30s">Прослушать 30с</string>
+    <string name="stop">Стоп</string>
     <string name="readonly_warning">⚠️ Просмотр оценок. Здесь оценивать треки нельзя.</string>
     <string name="duplicate_album">Данный альбом уже добавлен</string>
     <string name="total_albums">🎵 Альбомов</string>

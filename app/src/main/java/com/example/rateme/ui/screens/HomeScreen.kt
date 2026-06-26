@@ -1,5 +1,6 @@
 package com.example.rateme.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -10,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,6 +32,10 @@ import com.example.rateme.data.AlbumWithArtistAndSongs
 import com.example.rateme.data.model.Album
 import com.example.rateme.data.network.LastFmAlbumSummary
 import com.example.rateme.ui.components.ShimmerLoadingList
+
+enum class DashboardSection {
+    NEW, IN_PROGRESS
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -55,13 +61,30 @@ fun HomeScreen(
 ) {
     var albumToDelete by remember { mutableStateOf<Album?>(null) }
     var searchQuery by remember { mutableStateOf("") }
+    var activeSection by remember { mutableStateOf<DashboardSection?>(null) }
 
-    val filteredAlbums = remember(albums, searchQuery) {
-        if (searchQuery.isBlank()) albums
-        else albums.filter { 
-            it.album.title.contains(searchQuery, ignoreCase = true) || 
-            it.artist.name.contains(searchQuery, ignoreCase = true) 
+    val allInProgress = remember(albums) {
+        albums.filter { album ->
+            val ratedCount = album.songs.count { it.rating != null }
+            ratedCount > 0 && (ratedCount < album.songs.size)
         }
+    }
+
+    val topBestRated = remember(albums) {
+        albums.filter { album ->
+            val ratedCount = album.songs.count { it.rating != null }
+            ratedCount == album.songs.size && album.songs.isNotEmpty()
+        }.sortedByDescending { it.songs.mapNotNull { s -> s.rating }.average() }.take(5)
+    }
+
+    val allNewAlbums = remember(albums) {
+        albums.filter { album -> album.songs.all { it.rating == null } }
+            .sortedByDescending { it.album.id }
+    }
+
+    // Handle back button when in a sub-section
+    BackHandler(enabled = isDashboard && activeSection != null) {
+        activeSection = null
     }
 
     if (albumToDelete != null) {
@@ -88,24 +111,19 @@ fun HomeScreen(
         )
     }
 
-    val inProgress = remember(albums) {
-        albums.filter { album ->
-            val ratedCount = album.songs.count { it.rating != null }
-            ratedCount > 0 && (ratedCount < album.songs.size)
+    val currentDisplayList = remember(isDashboard, activeSection, albums, searchQuery, allNewAlbums, allInProgress) {
+        val baseList = when {
+            !isDashboard -> albums
+            activeSection == DashboardSection.NEW -> allNewAlbums
+            activeSection == DashboardSection.IN_PROGRESS -> allInProgress
+            else -> albums
         }
-    }
-
-    val bestRated = remember(albums) {
-        albums.filter { album ->
-            val ratedCount = album.songs.count { it.rating != null }
-            ratedCount == album.songs.size && album.songs.isNotEmpty()
-        }.sortedByDescending { it.songs.mapNotNull { s -> s.rating }.average() }.take(5)
-    }
-
-    val newAlbums = remember(albums) {
-        albums.filter { album -> album.songs.all { it.rating == null } }
-            .sortedByDescending { it.album.id }
-            .take(5)
+        
+        if (searchQuery.isBlank()) baseList
+        else baseList.filter { 
+            it.album.title.contains(searchQuery, ignoreCase = true) || 
+            it.artist.name.contains(searchQuery, ignoreCase = true) 
+        }
     }
 
     Scaffold(
@@ -118,13 +136,27 @@ fun HomeScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(56.dp)
                             .padding(horizontal = 16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(title, style = MaterialTheme.typography.titleMedium)
-                        if (showActions) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (isDashboard && activeSection != null) {
+                                IconButton(onClick = { activeSection = null }) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            val displayTitle = when {
+                                activeSection == DashboardSection.NEW -> "Все новые"
+                                activeSection == DashboardSection.IN_PROGRESS -> "Все в процессе"
+                                else -> title
+                            }
+                            Text(displayTitle, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        }
+                        
+                        if (showActions && activeSection == null) {
                             IconButton(onClick = onSettingsClick) {
                                 Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings))
                             }
@@ -135,9 +167,7 @@ fun HomeScreen(
         }
     ) { padding ->
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-                ShimmerLoadingList()
-            }
+            Box(modifier = Modifier.fillMaxSize().padding(padding)) { ShimmerLoadingList() }
         } else if (albums.isEmpty() && recommendations.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Text(stringResource(R.string.no_albums))
@@ -147,21 +177,18 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(bottom = 80.dp)
             ) {
-                if (!isDashboard) {
+                // Search bar for Library or Subsection
+                if (!isDashboard || activeSection != null) {
                     item {
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            placeholder = { Text("Поиск альбома или артиста") },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                            placeholder = { Text("Поиск...") },
                             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                             trailingIcon = {
                                 if (searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { searchQuery = "" }) {
-                                        Icon(Icons.Filled.Close, contentDescription = null)
-                                    }
+                                    IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Filled.Close, contentDescription = null) }
                                 }
                             },
                             singleLine = true,
@@ -170,45 +197,46 @@ fun HomeScreen(
                     }
                 }
 
-                if (isDashboard) {
-                    if (newAlbums.isNotEmpty()) {
+                if (isDashboard && activeSection == null) {
+                    // DASHBOARD MODE
+                    if (allNewAlbums.isNotEmpty()) {
                         item {
-                            SectionHeader("Новые альбомы")
+                            SectionHeader("Новые альбомы", onSeeAll = if (allNewAlbums.size > 5) { { activeSection = DashboardSection.NEW } } else null)
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                items(newAlbums) { item ->
+                                items(allNewAlbums.take(5)) { item ->
                                     DashboardAlbumCard(item, onAlbumClick, { albumToDelete = it.album })
                                 }
                             }
                         }
                     }
 
-                    if (inProgress.isNotEmpty()) {
+                    if (allInProgress.isNotEmpty()) {
                         item {
                             Spacer(modifier = Modifier.height(24.dp))
-                            SectionHeader("В процессе")
+                            SectionHeader("В процессе", onSeeAll = if (allInProgress.size > 5) { { activeSection = DashboardSection.IN_PROGRESS } } else null)
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                items(inProgress) { item ->
+                                items(allInProgress.take(5)) { item ->
                                     DashboardAlbumCard(item, onAlbumClick, { albumToDelete = it.album })
                                 }
                             }
                         }
                     }
 
-                    if (bestRated.isNotEmpty()) {
+                    if (topBestRated.isNotEmpty()) {
                         item {
                             Spacer(modifier = Modifier.height(24.dp))
-                            SectionHeader("Лучшие альбомы")
+                            SectionHeader("Лучшие альбомы") // Removed "See All" as requested
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                items(bestRated) { item ->
+                                items(topBestRated) { item ->
                                     DashboardAlbumCard(item, onAlbumClick, { albumToDelete = it.album })
                                 }
                             }
@@ -230,17 +258,17 @@ fun HomeScreen(
                         }
                     }
                 } else {
-                    items(filteredAlbums) { item ->
+                    // LIST MODE (Full Library or Subsection)
+                    items(currentDisplayList) { item ->
                         AlbumCard(
                             item = item,
-                            showActions = showActions,
+                            showActions = !isDashboard, // Only show buttons in Library, not in subsections
                             onAlbumClick = onAlbumClick,
                             onDeleteClick = { albumToDelete = item.album },
                             onEditClick = { onAlbumClick(item.album.id) }
                         )
                     }
                 }
-
                 item { Spacer(modifier = Modifier.height(24.dp)) }
             }
         }
@@ -248,13 +276,24 @@ fun HomeScreen(
 }
 
 @Composable
-fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-    )
+fun SectionHeader(title: String, onSeeAll: (() -> Unit)? = null) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold
+        )
+        if (onSeeAll != null) {
+            TextButton(onClick = onSeeAll) {
+                Text("Все", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Icon(Icons.Filled.ChevronRight, contentDescription = null, modifier = Modifier.size(16.dp))
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalFoundationApi::class)
@@ -308,7 +347,6 @@ fun DashboardAlbumCard(
                 }
             }
         } else {
-             // Fallback if scope is missing
             AsyncImage(
                 model = item.album.coverUrl,
                 contentDescription = null,
@@ -420,10 +458,22 @@ fun AlbumCard(
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(item.album.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Text(item.artist.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                Text(item.album.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(item.artist.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("⭐ $avgRating/10", style = MaterialTheme.typography.labelSmall)
-                Text(statusText, style = MaterialTheme.typography.labelSmall)
+                
+                // Fixed year display (ensuring it's in a Row with enough space)
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(statusText, style = MaterialTheme.typography.labelSmall)
+                    if (!item.album.year.isNullOrBlank()) {
+                        Text(
+                            text = " • ${item.album.year}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            maxLines = 1
+                        )
+                    }
+                }
             }
 
             // Status Icon
@@ -431,7 +481,7 @@ fun AlbumCard(
                 Icon(
                     imageVector = Icons.Filled.CheckCircle,
                     contentDescription = null,
-                    tint = Color(0xFF4CAF50), // Green
+                    tint = Color(0xFF4CAF50),
                     modifier = Modifier.size(24.dp).padding(horizontal = 4.dp)
                 )
             } else {

@@ -59,11 +59,17 @@ object AchievementManager {
         if (totalRated == -2) { // Special code for app open check
             val lastDate = AchievementRepository.getString(context, "last_rating_date") ?: ""
             if (lastDate.isNotEmpty()) {
-                val lastRatingDate = sdf.parse(lastDate)
-                val diff = Date().time - lastRatingDate.time
-                val days = diff / (1000 * 60 * 60 * 24)
-                if (days > 1) {
-                    AchievementRepository.saveInt(context, "rating_streak", 0)
+                try {
+                    val lastRatingDate = sdf.parse(lastDate)
+                    if (lastRatingDate != null) {
+                        val diff = Date().time - lastRatingDate.time
+                        val days = diff / (1000 * 60 * 60 * 24)
+                        if (days > 1) {
+                            AchievementRepository.saveInt(context, "rating_streak", 0)
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("AchievementManager", "Parse error: ${e.message}")
                 }
             }
         }

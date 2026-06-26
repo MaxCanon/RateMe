@@ -21,7 +21,8 @@ fun SettingsScreen(
     onThemeToggle: () -> Unit,
     onBack: () -> Unit,
     onStatsClick: () -> Unit = {},
-    onLanguageChange: () -> Unit = {}
+    onLanguageChange: () -> Unit = {},
+    onRefreshMetadata: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
@@ -79,10 +80,23 @@ fun SettingsScreen(
             )
 
             SettingsItem(
-                icon = Icons.Filled.Info,
-                title = stringResource(R.string.version),
-                subtitle = "0.8",
-                onClick = { }
+                icon = Icons.Filled.Update,
+                title = "Обновить данные",
+                subtitle = "Исправить года выпуска альбомов",
+                onClick = {
+                    onRefreshMetadata()
+                    android.widget.Toast.makeText(context, "Обновление запущено...", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            )
+
+            SettingsItem(
+                icon = Icons.Filled.History,
+                title = "Очистить историю",
+                subtitle = "Удалить запросы поиска",
+                onClick = {
+                    com.example.rateme.data.SearchHistory.clearHistory(context)
+                    android.widget.Toast.makeText(context, "История очищена", android.widget.Toast.LENGTH_SHORT).show()
+                }
             )
 
             SettingsItem(
@@ -93,11 +107,33 @@ fun SettingsScreen(
             )
 
             SettingsItem(
-                icon = Icons.Filled.Person,
-                title = stringResource(R.string.author),
-                subtitle = "tg: @brikiton",
-                onClick = { }
+                icon = Icons.Filled.ChatBubbleOutline,
+                title = "Поддержка",
+                subtitle = "Связаться с автором в Telegram",
+                onClick = {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://t.me/brikiton"))
+                    context.startActivity(intent)
+                }
             )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Footer
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "RateMe v0.8",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                )
+                Text(
+                    text = "Created with ❤️ by @brikiton",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                )
+            }
         }
     }
 }

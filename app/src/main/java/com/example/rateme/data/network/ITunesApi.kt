@@ -19,5 +19,6 @@ data class ITunesSearchResponse(
 
 data class ITunesTrack(
     val trackName: String?,
-    val previewUrl: String?
+    val previewUrl: String?,
+    val releaseDate: String?
 )

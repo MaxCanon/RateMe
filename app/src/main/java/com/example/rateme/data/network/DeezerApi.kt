@@ -1,6 +1,7 @@
 package com.example.rateme.data.network
 
 import retrofit2.http.GET
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface DeezerApi {
@@ -15,6 +16,16 @@ interface DeezerApi {
         @Query("q") query: String
     ): DeezerArtistResponse
 
+    @GET("search/album")
+    suspend fun searchAlbum(
+        @Query("q") query: String
+    ): DeezerAlbumResponse
+
+    @GET("album/{id}/tracks")
+    suspend fun getAlbumTracks(
+        @Path("id") albumId: Long
+    ): DeezerTracksResponse
+
     data class DeezerArtistResponse(
         val data: List<DeezerArtist>?
     )
@@ -25,6 +36,21 @@ interface DeezerApi {
         val picture_big: String?
     )
 }
+
+data class DeezerAlbumResponse(
+    val data: List<DeezerAlbumSummary>?
+)
+
+data class DeezerAlbumSummary(
+    val id: Long,
+    val title: String?,
+    val cover_big: String?,
+    val release_date: String?
+)
+
+data class DeezerTracksResponse(
+    val data: List<DeezerTrack>?
+)
 
 data class DeezerSearchResponse(
     val data: List<DeezerTrack>?

@@ -154,36 +154,82 @@ fun AddAlbumScreen(
                                     scope.launch {
                                         isLoading = true
                                         try {
-                                            val info = lastFmApi.getAlbumInfo(
-                                                artist = album.artist ?: "",
-                                                album = album.name ?: "",
-                                                apiKey = ApiKey.LAST_FM_API_KEY
-                                            )
-                                            val tracks = info.album?.tracks?.track?.mapNotNull { it.name } ?: emptyList()
-                                            val cover = info.album?.image?.lastOrNull()?.url
-                                            val year = info.album?.wiki?.published?.let {
-                                                Regex("\\d{4}").find(it)?.value
+                                            var finalTracks: List<String> = emptyList()
+                                            var finalPreviews = mutableMapOf<String, String>()
+                                            var finalCover = album.image?.lastOrNull()?.url
+                                            var finalYear: String? = null
+
+                                            // 1. Try Last.fm for tracks and info
+                                            try {
+                                                val info = lastFmApi.getAlbumInfo(
+                                                    artist = album.artist ?: "",
+                                                    album = album.name ?: "",
+                                                    apiKey = ApiKey.LAST_FM_API_KEY
+                                                )
+                                                finalTracks = info.album?.tracks?.track?.mapNotNull { it.name } ?: emptyList()
+                                                finalCover = info.album?.image?.lastOrNull()?.url ?: finalCover
+                                                // Last.fm wiki is often inaccurate for original release year, 
+                                                // but we'll take it as a last resort if others fail.
+                                            } catch (e: Exception) {
+                                                android.util.Log.e("AddAlbum", "Last.fm info failed: ${e.message}")
                                             }
 
-                                            val previews = mutableMapOf<String, String>()
-                                            tracks.forEach { track ->
-                                                try {
-                                                    val searchTerm = "${album.artist} $track"
-                                                    val response = iTunesApi.searchTrack(searchTerm)
-                                                    val previewUrl = response.results.firstOrNull()?.previewUrl
-                                                    if (previewUrl != null) previews[track] = previewUrl
-                                                } catch (_: Exception) {}
+                                            // 2. Fallback to Deezer for tracks and accurate release date
+                                            try {
+                                                val deezerSearch = ApiClient.deezerApi.searchAlbum("${album.artist} ${album.name}")
+                                                val deezerAlbum = deezerSearch.data?.firstOrNull { 
+                                                    it.title?.contains(album.name ?: "", ignoreCase = true) == true 
+                                                }
+                                                
+                                                if (deezerAlbum != null) {
+                                                    finalYear = deezerAlbum.release_date?.take(4)
+                                                    
+                                                    if (finalTracks.isEmpty()) {
+                                                        val deezerTracks = ApiClient.deezerApi.getAlbumTracks(deezerAlbum.id)
+                                                        finalTracks = deezerTracks.data?.mapNotNull { it.title } ?: emptyList()
+                                                        deezerTracks.data?.forEach { track ->
+                                                            if (track.title != null && track.preview != null) {
+                                                                finalPreviews[track.title] = track.preview
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            } catch (e: Exception) {
+                                                android.util.Log.e("AddAlbum", "Deezer failed: ${e.message}")
                                             }
+
+                                            // 3. iTunes fallback for year and missing previews
+                                            try {
+                                                val searchTerm = "${album.artist} ${album.name}"
+                                                val response = iTunesApi.searchTrack(searchTerm) // Use existing search
+                                                val itunesResult = response.results.firstOrNull()
+                                                
+                                                if (finalYear == null) {
+                                                    finalYear = itunesResult?.releaseDate?.take(4)
+                                                }
+
+                                                finalTracks.forEach { track ->
+                                                    if (!finalPreviews.containsKey(track)) {
+                                                        try {
+                                                            val trackSearch = "${album.artist} $track"
+                                                            val trackResp = iTunesApi.searchTrack(trackSearch)
+                                                            val previewUrl = trackResp.results.firstOrNull()?.previewUrl
+                                                            if (previewUrl != null) finalPreviews[track] = previewUrl
+                                                        } catch (_: Exception) {}
+                                                    }
+                                                }
+                                            } catch (_: Exception) {}
 
                                             onAlbumSelected(
                                                 album.artist ?: "",
                                                 album.name ?: "",
-                                                cover,
-                                                tracks,
-                                                previews,
-                                                year
+                                                finalCover,
+                                                finalTracks,
+                                                finalPreviews,
+                                                finalYear
                                             )
-                                        } catch (_: Exception) {
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("AddAlbum", "Selection failed: ${e.message}")
                                             onAlbumSelected(
                                                 album.artist ?: "",
                                                 album.name ?: "",

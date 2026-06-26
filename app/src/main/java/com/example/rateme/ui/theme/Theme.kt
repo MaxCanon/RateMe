@@ -38,11 +38,23 @@ fun RateMeTheme(
     content: @Composable () -> Unit
 ) {
     val baseScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    
     val colorScheme = if (seedColor != null) {
+        // Simple logic to prevent invisible primary colors on dark backgrounds
+        val adjustedPrimary = if (darkTheme) {
+            // If the color is too dark, we use a lightened version or a fallback
+            if (getLuminance(seedColor) < 0.1f) Color(0xFFEEEEEE) else seedColor
+        } else {
+            // In light theme, if it's too light, we could darken it, 
+            // but usually seedColors from covers are fine.
+            seedColor
+        }
+
         baseScheme.copy(
-            primary = seedColor,
-            secondary = seedColor,
-            outline = seedColor.copy(alpha = 0.5f)
+            primary = adjustedPrimary,
+            secondary = adjustedPrimary,
+            onPrimary = if (getLuminance(adjustedPrimary) > 0.5f) Color.Black else Color.White,
+            outline = adjustedPrimary.copy(alpha = 0.5f)
         )
     } else {
         baseScheme
@@ -53,4 +65,9 @@ fun RateMeTheme(
         typography = Typography,
         content = content
     )
+}
+
+// Helper to calculate luminance
+private fun getLuminance(color: Color): Float {
+    return 0.2126f * color.red + 0.7152f * color.green + 0.0722f * color.blue
 }

@@ -83,6 +83,13 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
     var ratedAlbums by remember { mutableStateOf<List<AlbumWithArtistAndSongs>>(emptyList()) }
     var albumsByRating by remember { mutableStateOf<List<AlbumWithAvgRating>>(emptyList()) }
     val recommendations by viewModel.recommendations.collectAsState()
+    val currentlyPlaying by viewModel.currentlyPlaying.collectAsState()
+    val playingArtistName by viewModel.playingArtistName.collectAsState()
+    val playingColor by viewModel.playingColor.collectAsState()
+    val isPlaying by viewModel.isPlaying.collectAsState()
+    val isPreparing by viewModel.isPreparing.collectAsState()
+    val playbackPosition by viewModel.playbackPosition.collectAsState()
+    val playbackDuration by viewModel.playbackDuration.collectAsState()
     var isLoading by remember { mutableStateOf(true) }
 
     val newAchievement by viewModel.newAchievement.observeAsState(initial = null)
@@ -129,50 +136,193 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
 
     Scaffold(
         bottomBar = {
-            if (showBottomBar) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                    tonalElevation = 8.dp
-                ) {
-                    Row(
+            Column(modifier = Modifier.navigationBarsPadding()) {
+                // Mini Player
+                currentlyPlaying?.let { song ->
+                    var showLinks by remember { mutableStateOf(false) }
+                    
+                    // Logic to ensure the player is visible even for black/dark covers
+                    val bgColor = playingColor ?: MaterialTheme.colorScheme.primaryContainer
+                    val isBgTooDark = (0.2126f * bgColor.red + 0.7152f * bgColor.green + 0.0722f * bgColor.blue) < 0.1f
+                    val playerContentColor = if (isBgTooDark) Color.White else Color.Black.copy(alpha = 0.8f)
+                    
+                    if (showLinks) {
+                        AlertDialog(
+                            onDismissRequest = { showLinks = false },
+                            title = { Text("Послушать полностью") },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    val query = "${playingArtistName ?: ""} ${song.title}"
+                                    val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
+                                    
+                                    val links = listOf(
+                                        "YouTube" to "https://www.youtube.com/results?search_query=$encodedQuery",
+                                        "Apple Music" to "https://music.apple.com/search?term=$encodedQuery",
+                                        "Yandex Music" to "https://music.yandex.ru/search?text=$encodedQuery",
+                                        "Last.fm" to "https://www.last.fm/search?q=$encodedQuery"
+                                    )
+
+                                    links.forEach { (name, url) ->
+                                        Button(
+                                            onClick = {
+                                                appContext.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                                                showLinks = false
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(name)
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showLinks = false }) { Text("Закрыть") }
+                            }
+                        )
+                    }
+
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .shadow(8.dp, MaterialTheme.shapes.medium),
+                        color = bgColor.copy(alpha = 0.95f),
+                        shape = MaterialTheme.shapes.medium,
+                        border = if (isBgTooDark) androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)) else null
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                            IconButton(onClick = { navController.navigate("home") { popUpTo("home") { inclusive = true }; launchSingleTop = true } }) {
-                                Icon(Icons.Filled.Home, contentDescription = null, tint = if (currentRoute == "home") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        Column {
+                            Row(
+                                modifier = Modifier
+                                    .padding(start = 8.dp, end = 8.dp, top = 8.dp)
+                                    .fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Filled.MusicNote,
+                                    contentDescription = null,
+                                    tint = playerContentColor,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = song.title,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        color = playerContentColor
+                                    )
+                                    if (isPreparing) {
+                                        Text(
+                                            text = "Загрузка...",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = playerContentColor.copy(alpha = 0.7f)
+                                        )
+                                    } else {
+                                        Button(
+                                            onClick = { showLinks = true },
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                            modifier = Modifier.height(32.dp),
+                                            shape = MaterialTheme.shapes.small,
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = playerContentColor.copy(alpha = 0.15f),
+                                                contentColor = playerContentColor
+                                            )
+                                        ) {
+                                            Text(
+                                                text = "Слушать полностью ↗",
+                                                style = MaterialTheme.typography.labelMedium
+                                            )
+                                        }
+                                    }
+                                }
+                                IconButton(
+                                    onClick = { viewModel.togglePlayback(song) },
+                                    enabled = !isPreparing
+                                ) {
+                                    if (isPreparing) {
+                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = playerContentColor)
+                                    } else {
+                                        Icon(
+                                            if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                            contentDescription = null,
+                                            tint = playerContentColor
+                                        )
+                                    }
+                                }
+                                IconButton(onClick = { viewModel.stopPlayback() }) {
+                                    Icon(
+                                        Icons.Filled.Close,
+                                        contentDescription = null,
+                                        tint = playerContentColor.copy(alpha = 0.5f)
+                                    )
+                                }
                             }
-                            Text(stringResource(R.string.home), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "home") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                            
+                            // Progress Bar / Slider
+                            Slider(
+                                value = playbackPosition.toFloat(),
+                                onValueChange = { viewModel.seekTo(it.toLong()) },
+                                valueRange = 0f..playbackDuration.toFloat().coerceAtLeast(1f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(24.dp)
+                                    .padding(horizontal = 12.dp),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = playerContentColor,
+                                    activeTrackColor = playerContentColor,
+                                    inactiveTrackColor = playerContentColor.copy(alpha = 0.24f)
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
                         }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                            IconButton(onClick = { navController.navigate("rated") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }) {
-                                Icon(Icons.Filled.ThumbUp, contentDescription = null, tint = if (currentRoute == "rated") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    }
+                }
+
+                if (showBottomBar) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                        tonalElevation = 8.dp
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                                IconButton(onClick = { navController.navigate("home") { popUpTo("home") { inclusive = true }; launchSingleTop = true } }) {
+                                    Icon(Icons.Filled.Home, contentDescription = null, tint = if (currentRoute == "home") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                }
+                                Text(stringResource(R.string.home), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "home") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                             }
-                            Text(stringResource(R.string.ratings), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "rated") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                            FloatingActionButton(onClick = { navController.navigate("add?query=") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } },
-                                modifier = Modifier.size(48.dp).shadow(8.dp, CircleShape), containerColor = MaterialTheme.colorScheme.primary, shape = CircleShape) {
-                                Icon(Icons.Filled.Add, contentDescription = "Добавить", tint = MaterialTheme.colorScheme.onPrimary)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                                IconButton(onClick = { navController.navigate("rated") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }) {
+                                    Icon(Icons.Filled.ThumbUp, contentDescription = null, tint = if (currentRoute == "rated") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                }
+                                Text(stringResource(R.string.ratings), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "rated") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                             }
-                            Text(stringResource(R.string.add), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                            IconButton(onClick = { navController.navigate("rating") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }) {
-                                Icon(Icons.Filled.Favorite, contentDescription = null, tint = if (currentRoute == "rating") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                                FloatingActionButton(onClick = { navController.navigate("add?query=") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } },
+                                    modifier = Modifier.size(48.dp).shadow(8.dp, CircleShape), containerColor = MaterialTheme.colorScheme.primary, shape = CircleShape) {
+                                    Icon(Icons.Filled.Add, contentDescription = "Добавить", tint = MaterialTheme.colorScheme.onPrimary)
+                                }
+                                Text(stringResource(R.string.add), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                             }
-                            Text(stringResource(R.string.rating), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "rating") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                            IconButton(onClick = { navController.navigate("stats") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }) {
-                                Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = if (currentRoute == "stats") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                                IconButton(onClick = { navController.navigate("rating") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }) {
+                                    Icon(Icons.Filled.Favorite, contentDescription = null, tint = if (currentRoute == "rating") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                }
+                                Text(stringResource(R.string.rating), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "rating") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                             }
-                            Text(stringResource(R.string.achievements), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "stats") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                                IconButton(onClick = { navController.navigate("stats") { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }) {
+                                    Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = if (currentRoute == "stats") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                                }
+                                Text(stringResource(R.string.achievements), style = MaterialTheme.typography.labelSmall, color = if (currentRoute == "stats") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                            }
                         }
                     }
                 }
@@ -214,21 +364,33 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                     composable("album/{albumId}") { backStackEntry ->
                         val id = backStackEntry.arguments?.getString("albumId")?.toLongOrNull()
                         CompositionLocalProvider(LocalAnimatedContentScope provides this) {
-                            AlbumScreen(albumWithSongs = albums.find { it.album.id == id }, onBack = { navController.navigate("home") },
+                            AlbumScreen(
+                                albumWithSongs = albums.find { it.album.id == id }, 
+                                onBack = { navController.navigate("home") },
                                 onRatingChanged = { songId, rating -> viewModel.updateRating(songId, rating, isDarkTheme) },
                                 onShareClick = { navController.context.startActivity(Intent.createChooser(it, "Поделиться")) }, 
                                 onTrackListen = { viewModel.incrementAchievement("27") },
-                                readOnly = false)
+                                readOnly = false,
+                                currentlyPlayingId = currentlyPlaying?.id,
+                                isPlaying = isPlaying,
+                                onTogglePlayback = { song, artist, color -> viewModel.togglePlayback(song, artist, color) }
+                            )
                         }
                     }
                     composable("album_view/{albumId}") { backStackEntry ->
                         val id = backStackEntry.arguments?.getString("albumId")?.toLongOrNull()
                         CompositionLocalProvider(LocalAnimatedContentScope provides this) {
-                            AlbumScreen(albumWithSongs = albums.find { it.album.id == id }, onBack = { navController.navigate("rating") },
+                            AlbumScreen(
+                                albumWithSongs = albums.find { it.album.id == id }, 
+                                onBack = { navController.navigate("rating") },
                                 onRatingChanged = { _, _ -> },
                                 onShareClick = { navController.context.startActivity(Intent.createChooser(it, "Поделиться")) }, 
                                 onTrackListen = { viewModel.incrementAchievement("27") },
-                                readOnly = true)
+                                readOnly = true,
+                                currentlyPlayingId = currentlyPlaying?.id,
+                                isPlaying = isPlaying,
+                                onTogglePlayback = { song, artist, color -> viewModel.togglePlayback(song, artist, color) }
+                            )
                         }
                     }
                     composable(
@@ -258,6 +420,8 @@ fun RateMeApp(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                                 navController.navigate("oldstats") 
                             }, onLanguageChange = {
                                 viewModel.incrementAchievement("7")
+                            }, onRefreshMetadata = {
+                                viewModel.refreshAllMetadata()
                             })
                     }
                     composable("oldstats") {
